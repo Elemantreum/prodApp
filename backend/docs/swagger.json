@@ -1,0 +1,1347 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Бэкенд для бронирования тренировок",
+        "title": "ProdApp API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/auth/telegram": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Логин через Telegram Mini App",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.tokenResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                }
+            }
+        },
+        "/auth/telegram/link": {
+            "post": {
+                "description": "Код берётся из POST /user/linkCode, полученного в сессии ДРУГОЙ платформы. После успешной привязки возвращает токен для аккаунта, к которому привязали (не нового).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Привязать Telegram к существующему аккаунту",
+                "parameters": [
+                    {
+                        "description": "Код привязки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.linkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.tokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "код не указан или истёк",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "невалидные initData",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/vk": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Логин через VK Mini App",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.tokenResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    }
+                }
+            }
+        },
+        "/auth/vk/link": {
+            "post": {
+                "description": "Код берётся из POST /user/linkCode, полученного в сессии ДРУГОЙ платформы, и передаётся как query-параметр code вместе с обычными launch-параметрами VK. После успешной привязки возвращает токен для аккаунта, к которому привязали (не нового).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Привязать VK к существующему аккаунту",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Код привязки",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.tokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "код не указан или истёк",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "невалидные launch params",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Доступно администратору для любого бронирования; обычному пользователю — только для своего",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Отменить бронирование",
+                "parameters": [
+                    {
+                        "description": "ID бронирования",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/booking.cancelBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/booking.Booking"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "доступ запрещён",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/getByTrainingId": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно любому авторизованному пользователю. Показывает только активные записи.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Кто записан на тренировку",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID тренировки",
+                        "name": "trainingId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/booking.Participant"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/getByUserId": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Доступно администратору для любого пользователя; обычному пользователю — только для самого себя",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Получить бронирования пользователя",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID пользователя",
+                        "name": "userId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/booking.Booking"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "доступ запрещён",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/booking/signUp": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Создаёт бронирование текущего пользователя на тренировку",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Записаться на тренировку",
+                "parameters": [
+                    {
+                        "description": "ID тренировки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/booking.signUpForTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/booking.Booking"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "аккаунт ещё не одобрен администратором",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Создать тренировку",
+                "parameters": [
+                    {
+                        "description": "Данные тренировки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.createTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.Training"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/get": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Получить список тренировок",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/training.Training"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/get/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Получить тренировку по ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID тренировки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.Training"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Одобрить пользователя",
+                "parameters": [
+                    {
+                        "description": "ID пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.userIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов. Нельзя применить к самому себе. Каскадно удаляет его брони.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Удалить пользователя",
+                "parameters": [
+                    {
+                        "description": "ID пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.userIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    "400": {
+                        "description": "нельзя удалить самого себя",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/get": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Получить список пользователей",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/user.User"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/get/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Получить пользователя по ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID пользователя",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "пользователь не найден",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/linkCode": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно любому авторизованному пользователю. Код одноразовый, живёт 5 минут — ввести его нужно при входе через ДРУГУЮ платформу (Telegram/VK) в /auth/telegram/link или /auth/vk/link, чтобы объединить аккаунты.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Получить код для привязки другой платформы",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.linkCodeResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/makeAdmin": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Выдать права администратора",
+                "parameters": [
+                    {
+                        "description": "ID пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.userIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "уже администратор",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/removeAdmin": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов. Нельзя применить к самому себе.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Забрать права администратора",
+                "parameters": [
+                    {
+                        "description": "ID пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.userIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "400": {
+                        "description": "нельзя снять права с самого себя",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "и так не администратор",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/unapprove": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Только для админов",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Снять одобрение с пользователя",
+                "parameters": [
+                    {
+                        "description": "ID пользователя",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.userIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "auth.linkRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.tokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "booking.Booking": {
+            "type": "object",
+            "properties": {
+                "bookingDate": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/booking.BookingStatus"
+                },
+                "trainingId": {
+                    "type": "integer"
+                },
+                "unbookingDate": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "booking.BookingStatus": {
+            "type": "integer",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "Active",
+                "Cancelled",
+                "Completed",
+                "NotCompleted"
+            ]
+        },
+        "booking.Participant": {
+            "type": "object",
+            "properties": {
+                "bookingDate": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "booking.cancelBookingRequest": {
+            "type": "object",
+            "properties": {
+                "bookingId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "booking.signUpForTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "trainingId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.Training": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.createTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "user.User": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isAdmin": {
+                    "type": "boolean"
+                },
+                "isApproved": {
+                    "type": "boolean"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.linkCodeResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.userIdRequest": {
+            "type": "object",
+            "properties": {
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Введите токен в формате: Bearer {token}",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
+        "OAuth2AccessCode": {
+            "type": "oauth2",
+            "flow": "accessCode",
+            "authorizationUrl": "http://localhost:8081/realms/prodApp/protocol/openid-connect/auth",
+            "tokenUrl": "http://localhost:8081/realms/prodApp/protocol/openid-connect/token",
+            "scopes": {
+                "openid": "openid scope"
+            }
+        }
+    }
+}

@@ -1,0 +1,875 @@
+basePath: /api/v1
+definitions:
+  auth.linkRequest:
+    properties:
+      code:
+        type: string
+    type: object
+  auth.tokenResponse:
+    properties:
+      access_token:
+        type: string
+    type: object
+  booking.Booking:
+    properties:
+      bookingDate:
+        type: string
+      id:
+        type: integer
+      status:
+        $ref: '#/definitions/booking.BookingStatus'
+      trainingId:
+        type: integer
+      unbookingDate:
+        type: string
+      userId:
+        type: integer
+    type: object
+  booking.BookingStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    type: integer
+    x-enum-varnames:
+    - Active
+    - Cancelled
+    - Completed
+    - NotCompleted
+  booking.Participant:
+    properties:
+      bookingDate:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      userId:
+        type: integer
+      username:
+        type: string
+    type: object
+  booking.cancelBookingRequest:
+    properties:
+      bookingId:
+        type: integer
+    type: object
+  booking.signUpForTrainingRequest:
+    properties:
+      trainingId:
+        type: integer
+    type: object
+  training.Training:
+    properties:
+      createdAt:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      date:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      maxQuantity:
+        type: integer
+    type: object
+  training.createTrainingRequest:
+    properties:
+      date:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      maxQuantity:
+        type: integer
+    type: object
+  user.User:
+    properties:
+      createdAt:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: integer
+      isAdmin:
+        type: boolean
+      isApproved:
+        type: boolean
+      lastName:
+        type: string
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  user.linkCodeResponse:
+    properties:
+      code:
+        type: string
+      expiresAt:
+        type: string
+    type: object
+  user.userIdRequest:
+    properties:
+      userId:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Бэкенд для бронирования тренировок
+  title: ProdApp API
+  version: "1.0"
+paths:
+  /auth/telegram:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.tokenResponse'
+        "401":
+          description: Unauthorized
+      summary: Логин через Telegram Mini App
+      tags:
+      - auth
+  /auth/telegram/link:
+    post:
+      consumes:
+      - application/json
+      description: Код берётся из POST /user/linkCode, полученного в сессии ДРУГОЙ
+        платформы. После успешной привязки возвращает токен для аккаунта, к которому
+        привязали (не нового).
+      parameters:
+      - description: Код привязки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.linkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.tokenResponse'
+        "400":
+          description: код не указан или истёк
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: невалидные initData
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Привязать Telegram к существующему аккаунту
+      tags:
+      - auth
+  /auth/vk:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.tokenResponse'
+        "401":
+          description: Unauthorized
+      summary: Логин через VK Mini App
+      tags:
+      - auth
+  /auth/vk/link:
+    post:
+      description: Код берётся из POST /user/linkCode, полученного в сессии ДРУГОЙ
+        платформы, и передаётся как query-параметр code вместе с обычными launch-параметрами
+        VK. После успешной привязки возвращает токен для аккаунта, к которому привязали
+        (не нового).
+      parameters:
+      - description: Код привязки
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.tokenResponse'
+        "400":
+          description: код не указан или истёк
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: невалидные launch params
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Привязать VK к существующему аккаунту
+      tags:
+      - auth
+  /booking/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Доступно администратору для любого бронирования; обычному пользователю
+        — только для своего
+      parameters:
+      - description: ID бронирования
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/booking.cancelBookingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/booking.Booking'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: доступ запрещён
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Отменить бронирование
+      tags:
+      - booking
+  /booking/getByTrainingId:
+    get:
+      description: Доступно любому авторизованному пользователю. Показывает только
+        активные записи.
+      parameters:
+      - description: ID тренировки
+        in: query
+        name: trainingId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/booking.Participant'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Кто записан на тренировку
+      tags:
+      - booking
+  /booking/getByUserId:
+    get:
+      description: Доступно администратору для любого пользователя; обычному пользователю
+        — только для самого себя
+      parameters:
+      - description: ID пользователя
+        in: query
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/booking.Booking'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: доступ запрещён
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Получить бронирования пользователя
+      tags:
+      - booking
+  /booking/signUp:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт бронирование текущего пользователя на тренировку
+      parameters:
+      - description: ID тренировки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/booking.signUpForTrainingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/booking.Booking'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: аккаунт ещё не одобрен администратором
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Записаться на тренировку
+      tags:
+      - booking
+  /trainings/create:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов
+      parameters:
+      - description: Данные тренировки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/training.createTrainingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/training.Training'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Создать тренировку
+      tags:
+      - trainings
+  /trainings/get:
+    get:
+      description: Только для админов
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/training.Training'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Получить список тренировок
+      tags:
+      - trainings
+  /trainings/get/{id}:
+    get:
+      description: Только для админов
+      parameters:
+      - description: ID тренировки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/training.Training'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Получить тренировку по ID
+      tags:
+      - trainings
+  /user/approve:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов
+      parameters:
+      - description: ID пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.userIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Одобрить пользователя
+      tags:
+      - users
+  /user/delete:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. Нельзя применить к самому себе. Каскадно удаляет
+        его брони.
+      parameters:
+      - description: ID пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.userIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: нельзя удалить самого себя
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить пользователя
+      tags:
+      - users
+  /user/get:
+    get:
+      description: Только для админов
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/user.User'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить список пользователей
+      tags:
+      - users
+  /user/get/{id}:
+    get:
+      description: Только для админов
+      parameters:
+      - description: ID пользователя
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: пользователь не найден
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить пользователя по ID
+      tags:
+      - users
+  /user/linkCode:
+    post:
+      description: Доступно любому авторизованному пользователю. Код одноразовый,
+        живёт 5 минут — ввести его нужно при входе через ДРУГУЮ платформу (Telegram/VK)
+        в /auth/telegram/link или /auth/vk/link, чтобы объединить аккаунты.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.linkCodeResponse'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить код для привязки другой платформы
+      tags:
+      - users
+  /user/makeAdmin:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов
+      parameters:
+      - description: ID пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.userIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: уже администратор
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Выдать права администратора
+      tags:
+      - users
+  /user/removeAdmin:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. Нельзя применить к самому себе.
+      parameters:
+      - description: ID пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.userIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+        "400":
+          description: нельзя снять права с самого себя
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: и так не администратор
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Забрать права администратора
+      tags:
+      - users
+  /user/unapprove:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов
+      parameters:
+      - description: ID пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.userIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Снять одобрение с пользователя
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: 'Введите токен в формате: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+  OAuth2AccessCode:
+    authorizationUrl: http://localhost:8081/realms/prodApp/protocol/openid-connect/auth
+    flow: accessCode
+    scopes:
+      openid: openid scope
+    tokenUrl: http://localhost:8081/realms/prodApp/protocol/openid-connect/token
+    type: oauth2
+swagger: "2.0"
