@@ -18,6 +18,31 @@ func NewPostgresIdentityRepository(pool *pgxpool.Pool) *PostgresIdentityReposito
 	return &PostgresIdentityRepository{pool: pool}
 }
 
+func (r *PostgresIdentityRepository) GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, user_id, provider, external_id
+		 FROM user_identities
+		 WHERE provider = $1`, provider)
+	if err != nil {
+		return nil, fmt.Errorf("GetBatchById: %w", err)
+	}
+	defer rows.Close()
+
+	identities := make([]Identity, 0)
+	for rows.Next() {
+		var identity Identity
+		if err := rows.Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		identities = append(identities, identity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+
+	return identities, err
+}
+
 func (r *PostgresIdentityRepository) FindByProviderAndExternalID(ctx context.Context, provider, externalID string) (*Identity, error) {
 	var identity Identity
 	err := r.pool.QueryRow(ctx,
@@ -145,6 +170,32 @@ func (p *PostgresUserRepository) FindById(ctx context.Context, id int) (*User, e
 func (p *PostgresUserRepository) GetAll(ctx context.Context) ([]User, error) {
 	rows, err := p.pool.Query(ctx,
 		`SELECT id, username, first_name, last_name, is_approved, is_admin, created_at, updated_at FROM users`)
+	if err != nil {
+		return nil, fmt.Errorf("get all users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]User, 0)
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.Id, &user.Username, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+
+	return users, nil
+}
+
+func (p *PostgresUserRepository) FindAdmins(ctx context.Context) ([]User, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT id, first_name, last_name, is_approved, is_admin 
+			FROM users
+			WHERE is_admin = true
+			`)
 	if err != nil {
 		return nil, fmt.Errorf("get all users: %w", err)
 	}
