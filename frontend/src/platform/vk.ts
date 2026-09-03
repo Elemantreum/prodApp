@@ -6,10 +6,27 @@ export function isVk(): boolean {
   return params.has("vk_user_id") && params.has("sign");
 }
 
-/** The raw launch-params query string, exactly as VK gave it — this is what
- *  the backend's HMAC signature check (auth/authenticator.go) verifies. */
+/**
+ * The raw launch-params query string, exactly as VK gave it — this is what
+ * the backend's HMAC signature check (auth/authenticator.go) verifies.
+ *
+ * Captured once, at MODULE LOAD time (not lazily on first call). React
+ * Router's client-side navigation (pushState to a plain path like
+ * "/account") drops the query string from the URL — read this later (e.g.
+ * from the account-linking screen) and window.location.search would already
+ * be empty, silently turning the request into an unsigned one (backend
+ * correctly rejects those with 401). A lazy "cache on first call" isn't
+ * enough by itself either: if the user already has a valid cached token,
+ * AuthContext's bootstrap skips the login call entirely, so nothing would
+ * have called this before the user navigates away and empties the URL. This
+ * module's top-level code runs once, synchronously, before React even
+ * mounts — always before any navigation — so reading it here unconditionally
+ * is the one point that's guaranteed safe.
+ */
+const capturedLaunchQuery = window.location.search.replace(/^\?/, "");
+
 export function getVkLaunchQuery(): string {
-  return window.location.search.replace(/^\?/, "");
+  return capturedLaunchQuery;
 }
 
 export async function initVk(): Promise<void> {

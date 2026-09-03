@@ -72,3 +72,20 @@ export function getTelegramWebApp(): TelegramWebApp | null {
 export function isTelegram(): boolean {
   return !!getTelegramWebApp()?.initData;
 }
+
+/**
+ * Deliberately a LIVE read on every call, unlike VK's getVkLaunchQuery()
+ * (which caches at module load). Tried caching this the same way once —
+ * wrong move: Telegram's client keeps window.Telegram.WebApp.initData fresh
+ * over the WebView's lifetime (e.g. when the app regains focus after being
+ * backgrounded), so a one-time snapshot goes stale while the session is
+ * still open. That stale snapshot is exactly what made "Повторить" after a
+ * 401 keep failing with a real "unauthorized" from the backend — the retry
+ * resent the frozen old initData instead of the currently-valid one — while
+ * a full relaunch worked, because relaunching re-runs this module and grabs
+ * a fresh value. VK's query-string caching stays as-is; that one's forced by
+ * React Router wiping location.search on navigation, a different problem.
+ */
+export function getTelegramInitData(): string {
+  return window.Telegram?.WebApp?.initData ?? "";
+}

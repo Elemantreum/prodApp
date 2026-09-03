@@ -11,6 +11,9 @@ export interface Training {
   duration: number;
   isActive: boolean;
   createdAt: string;
+  /** How many active bookings this training currently has — joined in on
+   *  the backend, no separate request needed to show it on the card. */
+  bookedCount: number;
 }
 
 export type BookingStatus = "active" | "cancelled" | "completed" | "not_completed";
@@ -29,6 +32,19 @@ export interface Participant {
   firstName: string;
   lastName: string;
   username: string;
+  bookingDate: string;
+}
+
+/** Админский взгляд на одну запись на тренировку — в отличие от Participant
+ *  включает id брони (нужен для setAttendance) и статус, и не отфильтрован
+ *  по статусу (сюда попадают и отменённые). См. TrainingAdminModal. */
+export interface BookingDetail {
+  bookingId: number;
+  userId: number;
+  firstName: string;
+  lastName: string;
+  username: string;
+  status: BookingStatus;
   bookingDate: string;
 }
 
@@ -51,6 +67,11 @@ export interface LinkCode {
   expiresAt: string;
 }
 
+export interface Identity {
+  provider: string;
+  externalId: string;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -58,6 +79,12 @@ export interface User {
   lastName: string;
   isApproved: boolean;
   isAdmin: boolean;
+  /** Прошёл ли обязательный шаг "как вас зовут" при первом входе — см.
+   *  RegistrationGate. Пока false, приложение показывает только этот шаг. */
+  isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
+  /** All platforms linked to this account — can be more than one after
+   *  account linking (see AccountPage). */
+  identities: Identity[];
 }

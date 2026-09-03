@@ -4,7 +4,7 @@ import { api, setAuthToken, setUnauthorizedHandler } from "../api/client";
 import { detectPlatform } from "../platform/detect";
 import type { Platform } from "../platform/detect";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "../platform/theme";
-import { getTelegramWebApp } from "../platform/telegram";
+import { getTelegramInitData, getTelegramWebApp } from "../platform/telegram";
 import { getVkLaunchQuery, initVk, subscribeVkTheme } from "../platform/vk";
 import { decodeJwt, isExpired } from "./jwt";
 import type { JwtClaims } from "./jwt";
@@ -28,9 +28,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function performLogin(platform: Platform): Promise<string> {
   if (platform === "telegram") {
-    const tg = getTelegramWebApp();
-    if (!tg?.initData) throw new Error("Telegram initData недоступен");
-    const { access_token } = await api.authTelegram(tg.initData);
+    const initData = getTelegramInitData();
+    if (!initData) throw new Error("Telegram initData недоступен");
+    const { access_token } = await api.authTelegram(initData);
     return access_token;
   }
   if (platform === "vk") {

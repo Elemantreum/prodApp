@@ -40,6 +40,10 @@ export function TrainingsPage() {
     try {
       const booking = await api.signUp(trainingId);
       setMyBookings((prev) => [...prev, booking]);
+      // Оптимистично подвинуть счётчик на карточке, не дожидаясь рефетча.
+      setTrainings((prev) =>
+        prev ? prev.map((t) => (t.id === trainingId ? { ...t, bookedCount: t.bookedCount + 1 } : t)) : prev,
+      );
     } catch (e) {
       // 403 здесь может означать только одно: CreateBooking на бэке отказывает
       // только по причине "не одобрен админом" — так что подменяем сырой
@@ -81,6 +85,9 @@ export function TrainingsPage() {
                 onSignUp={handleSignUp}
                 signingUp={signingUpId === t.id}
                 alreadyBooked={activeBookedTrainingIds.has(t.id)}
+                onTrainingUpdated={(updated) =>
+                  setTrainings((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? prev)
+                }
               />
             ))}
         </div>

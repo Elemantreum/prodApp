@@ -34,6 +34,9 @@ func (p *PostgresTrainingRepository) Create(ctx context.Context, description str
 		return nil, fmt.Errorf("error inserting training: %w", err)
 	}
 
+	// Свежесозданная тренировка ещё не могла обрасти бронями — запрос не нужен.
+	tr.BookedCount = 0
+
 	return &tr, nil
 }
 
@@ -68,12 +71,22 @@ func (p *PostgresTrainingRepository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
+// selectTrainingsWithBookedCount джойнит bookings прямо в SQL, чтобы отдать
+// карточкам на фронте счётчик "сколько записано" без лишнего запроса на
+// каждую тренировку. LEFT JOIN + FILTER — так тренировки без единой брони
+// тоже попадают в выборку, с booked_count = 0.
+const selectTrainingsWithBookedCount = `
+	SELECT t.id, t.description, t.date, t.max_quantity, t.duration_ns, t.is_active, t.created_at,
+	       COUNT(b.id) FILTER (WHERE b.status = 'active') AS booked_count
+	FROM trainings t
+	LEFT JOIN bookings b ON b.training_id = t.id`
+
 func (p *PostgresTrainingRepository) FindById(ctx context.Context, id int) (*Training, error) {
 	row := p.pool.QueryRow(ctx,
-		"SELECT id, description, date, max_quantity, duration_ns, is_active, created_at FROM trainings WHERE id = $1", id)
+		selectTrainingsWithBookedCount+" WHERE t.id = $1 GROUP BY t.id", id)
 
 	var tr Training
-	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt)
+	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.BookedCount)
 
 	if err != nil {
 		return nil, fmt.Errorf("training with id %v: %w", id, err)
@@ -83,8 +96,7 @@ func (p *PostgresTrainingRepository) FindById(ctx context.Context, id int) (*Tra
 }
 
 func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, error) {
-	rows, err := p.pool.Query(ctx,
-		"SELECT id, description, date, max_quantity, duration_ns, is_active, created_at FROM trainings")
+	rows, err := p.pool.Query(ctx, selectTrainingsWithBookedCount+" GROUP BY t.id ORDER BY t.id")
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting trainings: %w", err)
@@ -96,7 +108,7 @@ func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, er
 	for rows.Next() {
 		var tr Training
 
-		err := rows.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt)
+		err := rows.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.BookedCount)
 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning training: %w", err)
