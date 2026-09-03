@@ -17,6 +17,7 @@ type UserRepository interface {
 	Delete(ctx context.Context, user *User) error
 	FindById(ctx context.Context, id int) (*User, error)
 	GetAll(ctx context.Context) ([]User, error)
+	FindAdmins(ctx context.Context) ([]User, error)
 }
 type IdentityRepository interface {
 	Create(ctx context.Context, identity *Identity) (*Identity, error)
@@ -26,6 +27,7 @@ type IdentityRepository interface {
 	FindByProviderAndExternalID(ctx context.Context, provider, externalID string) (*Identity, error)
 	FindByUserID(ctx context.Context, userID int) ([]Identity, error)
 	Reassign(ctx context.Context, provider, externalID string, newUserID int) error
+	GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error)
 }
 
 type LinkCodeRepository interface {
@@ -122,6 +124,12 @@ func (s *UserService) ResolveAndLink(ctx context.Context, code, provider, extern
 	return s.GetUser(ctx, lc.UserId)
 }
 
+func (s *UserService) GetBatchTgById(ctx context.Context, id []int, provider string) ([]Identity, error) {
+	identity, err := s.identityRepo.GetBatchById(ctx, id, provider)
+	if err != nil {
+		return nil, fmt.Errorf("get identity by id: %w", err)
+	}
+	return identity, err
 // cleanupOrphan подчищает аккаунт, оставшийся без единой привязки после
 // ResolveAndLink. Удаляет ТОЛЬКО если на нём нет ни одной брони — Delete
 // каскадно снёс бы их вместе с аккаунтом, а это уже настоящая потеря
@@ -285,6 +293,14 @@ func (service *UserService) NewUser(ctx context.Context, firstName string, lastN
 
 func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {
 	users, err := s.userRepo.GetAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	return users, nil
+}
+
+func (s *UserService) ListAdmins(ctx context.Context) ([]User, error) {
+	users, err := s.userRepo.FindAdmins(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
