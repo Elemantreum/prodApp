@@ -1,4 +1,15 @@
-import type { AuthResponse, Booking, CreateTrainingInput, LinkCode, Participant, Training, User } from "./types";
+import type {
+  AuthResponse,
+  Booking,
+  BookingDetail,
+  CreateTrainingInput,
+  Identity,
+  LinkCode,
+  Participant,
+  RecurringTraining,
+  Training,
+  User,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
@@ -133,12 +144,76 @@ export const api = {
     });
   },
 
+  updateTraining(id: number, input: CreateTrainingInput & { isActive: boolean }): Promise<Training> {
+    return request<Training>("/trainings/update", {
+      method: "POST",
+      body: JSON.stringify({ id, ...input }),
+    });
+  },
+
+  /** Отказывает (409), если на тренировку есть хоть одна запись — сначала
+   *  нужно её деактивировать через updateTraining. */
+  deleteTraining(id: number): Promise<true> {
+    return request<true>("/trainings/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  },
+
+  /** anchorDate — дата и время первого занятия; правило само материализует
+   *  его и все последующие еженедельные занятия, как только подходит
+   *  leadTime до каждой из них. */
+  createRecurringTraining(input: {
+    description: string;
+    anchorDate: string;
+    maxQuantity: number;
+    duration: number;
+    leadTime: number;
+  }): Promise<RecurringTraining> {
+    return request<RecurringTraining>("/trainings/recurring/create", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  getRecurringTrainings(): Promise<RecurringTraining[]> {
+    return request<RecurringTraining[] | null>("/trainings/recurring/get").then((r) => r ?? []);
+  },
+
+  /** Правит все поля правила разом, включая isActive — им же правило и
+   *  включается, и выключается. */
+  updateRecurringTraining(
+    id: number,
+    input: { description: string; anchorDate: string; maxQuantity: number; duration: number; leadTime: number; isActive: boolean },
+  ): Promise<RecurringTraining> {
+    return request<RecurringTraining>("/trainings/recurring/update", {
+      method: "POST",
+      body: JSON.stringify({ id, ...input }),
+    });
+  },
+
   getBookingsByUserId(userId: number): Promise<Booking[]> {
     return request<Booking[] | null>(`/booking/getByUserId?userId=${userId}`).then((r) => r ?? []);
   },
 
   getTrainingParticipants(trainingId: number): Promise<Participant[]> {
     return request<Participant[] | null>(`/booking/getByTrainingId?trainingId=${trainingId}`).then((r) => r ?? []);
+  },
+
+  /** Все записи на тренировку, включая отменённые — только для админа.
+   *  В отличие от getTrainingParticipants несёт id брони и статус, чтобы
+   *  тут же можно было отметить посещаемость. */
+  getTrainingBookings(trainingId: number): Promise<BookingDetail[]> {
+    return request<BookingDetail[] | null>(`/booking/admin/getByTrainingId?trainingId=${trainingId}`).then(
+      (r) => r ?? [],
+    );
+  },
+
+  setAttendance(bookingId: number, attended: boolean): Promise<Booking> {
+    return request<Booking>("/booking/setAttendance", {
+      method: "POST",
+      body: JSON.stringify({ bookingId, attended }),
+    });
   },
 
   signUp(trainingId: number): Promise<Booking> {
@@ -157,6 +232,25 @@ export const api = {
 
   getUsers(): Promise<User[]> {
     return request<User[] | null>("/user/get").then((r) => r ?? []);
+  },
+
+  /** My own profile — not in the JWT (that only carries user_id/is_admin/is_approved). */
+  getOwnProfile(): Promise<User> {
+    return request<User>("/user/me");
+  },
+
+  /** All platforms linked to *my* account. */
+  getOwnIdentities(): Promise<Identity[]> {
+    return request<Identity[] | null>("/user/identities").then((r) => r ?? []);
+  },
+
+  /** Omit userId to update your own profile. Non-admins can only target
+   *  themselves, and only while unapproved — backend enforces both. */
+  updateProfile(firstName: string, lastName: string, userId?: number): Promise<User> {
+    return request<User>("/user/updateProfile", {
+      method: "POST",
+      body: JSON.stringify({ userId, firstName, lastName }),
+    });
   },
 
   approveUser(userId: number): Promise<User> {

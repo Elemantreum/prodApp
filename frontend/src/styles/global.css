@@ -154,6 +154,18 @@ textarea {
   gap: 12px;
 }
 
+.training-card__recurring {
+  margin-left: 6px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.training-card__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .training-card__toggle {
   align-self: flex-start;
   background: none;
@@ -163,6 +175,38 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* ---------- occupancy bar (сколько записано / сколько мест) ---------- */
+
+.occupancy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.occupancy__bar {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.occupancy__segment {
+  height: 6px;
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--divider);
+  transition: background-color 0.2s ease;
+}
+
+.occupancy__label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--hint);
+  white-space: nowrap;
 }
 
 .participants {
@@ -233,10 +277,14 @@ textarea {
   color: var(--danger);
 }
 
-.badge--completed,
+.badge--completed {
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  color: #22c55e;
+}
+
 .badge--not_completed {
-  background: color-mix(in srgb, var(--hint) 20%, transparent);
-  color: var(--hint);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
 }
 
 .badge--admin {
@@ -294,13 +342,21 @@ textarea {
 
 .user-card__actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
 .user-card__actions .btn {
+  width: 100%;
+}
+
+.user-card__actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.user-card__actions-row .btn {
   flex: 1;
-  min-width: 100px;
 }
 
 /* ---------- buttons ---------- */
@@ -478,6 +534,19 @@ textarea {
   color: var(--text);
 }
 
+/* ---------- search input (admin users list) ---------- */
+
+.search-input {
+  width: 100%;
+  background: var(--secondary-bg);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
 /* ---------- auth gate ---------- */
 
 .gate {
@@ -488,6 +557,19 @@ textarea {
   justify-content: center;
   gap: 16px;
   padding: 24px;
+  text-align: center;
+}
+
+.gate__form {
+  width: 100%;
+  max-width: 320px;
+  text-align: left;
+}
+
+.gate__title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px;
   text-align: center;
 }
 
@@ -515,4 +597,132 @@ textarea {
   border-radius: 8px;
   padding: 8px;
   resize: vertical;
+}
+
+/* ---------- form checkbox (used by TrainingAdminModal) ---------- */
+
+.form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.form__checkbox input {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- modal (admin training edit + attendance) ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-panel {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  padding: 16px 16px calc(16px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--hint);
+  cursor: pointer;
+}
+
+.modal-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.modal-section:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.modal-section h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--hint);
+}
+
+/* ---------- attendance list (inside TrainingAdminModal) ---------- */
+
+.attendance-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.attendance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.attendance-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.attendance-row--column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.attendance-row--column .form {
+  width: 100%;
+}
+
+.attendance-row__info {
+  min-width: 0;
+}
+
+.attendance-row__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.attendance-row__actions .btn {
+  padding: 6px 10px;
+  font-size: 12px;
 }

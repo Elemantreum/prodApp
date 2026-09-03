@@ -158,6 +158,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/booking/admin/getByTrainingId": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. В отличие от getByTrainingId — включает отменённые записи и id брони.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Все записи на тренировку (админ)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID тренировки",
+                        "name": "trainingId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/booking.BookingDetail"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/booking/cancel": {
             "post": {
                 "security": [
@@ -349,6 +416,84 @@ const docTemplate = `{
                 }
             }
         },
+        "/booking/setAttendance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. Переводит бронь в completed (пришёл) или not_completed (не пришёл); отменённую бронь трогать нельзя.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Отметить посещаемость (админ)",
+                "parameters": [
+                    {
+                        "description": "ID брони и признак посещения",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/booking.setAttendanceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/booking.Booking"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "бронь отменена",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/booking/signUp": {
             "post": {
                 "security": [
@@ -487,6 +632,84 @@ const docTemplate = `{
                 }
             }
         },
+        "/trainings/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. Отказывает (409), если на тренировку есть хоть одна запись — сначала деактивируйте её через UpdateTraining.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Удалить тренировку",
+                "parameters": [
+                    {
+                        "description": "ID тренировки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.trainingIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "на тренировку есть записи",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/trainings/get": {
             "get": {
                 "security": [
@@ -497,7 +720,7 @@ const docTemplate = `{
                         "OAuth2AccessCode": []
                     }
                 ],
-                "description": "Только для админов",
+                "description": "Админу — все тренировки, включая неактивные. Остальным авторизованным пользователям — только активные.",
                 "produces": [
                     "application/json"
                 ],
@@ -517,15 +740,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "не авторизован",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "нет прав администратора",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -609,6 +823,271 @@ const docTemplate = `{
                 }
             }
         },
+        "/trainings/recurring/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. AnchorDate — дата и время первого занятия, дальше повторяется каждые 7 дней от неё. Первые занятия материализуются сразу.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Создать регулярную тренировку",
+                "parameters": [
+                    {
+                        "description": "Данные правила",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.createRecurringTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.RecurringTraining"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/recurring/get": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Список правил регулярных тренировок",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/training.RecurringTraining"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/recurring/update": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. Тем же полем isActive правило можно как остановить, так и снова включить.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Изменить регулярную тренировку",
+                "parameters": [
+                    {
+                        "description": "Изменённые данные правила",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.updateRecurringTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.RecurringTraining"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/update": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Изменить тренировку",
+                "parameters": [
+                    {
+                        "description": "Изменённые данные тренировки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.updateTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.Training"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/user/approve": {
             "post": {
                 "security": [
@@ -642,7 +1121,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/user.userWithIdentities"
                         }
                     },
                     "401": {
@@ -771,7 +1250,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/user.User"
+                                "$ref": "#/definitions/user.userWithIdentities"
                             }
                         }
                     },
@@ -833,7 +1312,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/user.userWithIdentities"
                         }
                     },
                     "401": {
@@ -856,6 +1335,52 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "пользователь не найден",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/identities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно любому авторизованному пользователю, только про самого себя",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Какие платформы привязаны к моему аккаунту",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/user.identityInfo"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -951,7 +1476,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/user.userWithIdentities"
                         }
                     },
                     "401": {
@@ -974,6 +1499,49 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "уже администратор",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно любому авторизованному пользователю, только про самого себя",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Мой профиль",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.userWithIdentities"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1026,7 +1594,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/user.userWithIdentities"
                         }
                     },
                     "400": {
@@ -1110,7 +1678,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/user.userWithIdentities"
                         }
                     },
                     "401": {
@@ -1124,6 +1692,72 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/user/updateProfile": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "userId в теле — 0 или отсутствует значит \"себя\". Обычный пользователь может менять только себя, и только пока не одобрен администратором — после одобрения имя \"замораживается\" и дальше его может поменять только админ (кому угодно и когда угодно).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Изменить имя и фамилию",
+                "parameters": [
+                    {
+                        "description": "ID пользователя (необязательно), имя и фамилия",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.profileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.userWithIdentities"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "чужой профиль или уже одобрен",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1184,6 +1818,32 @@ const docTemplate = `{
                 }
             }
         },
+        "booking.BookingDetail": {
+            "type": "object",
+            "properties": {
+                "bookingDate": {
+                    "type": "string"
+                },
+                "bookingId": {
+                    "type": "integer"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/booking.BookingStatus"
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "booking.BookingStatus": {
             "type": "integer",
             "enum": [
@@ -1227,6 +1887,17 @@ const docTemplate = `{
                 }
             }
         },
+        "booking.setAttendanceRequest": {
+            "type": "object",
+            "properties": {
+                "attended": {
+                    "type": "boolean"
+                },
+                "bookingId": {
+                    "type": "integer"
+                }
+            }
+        },
         "booking.signUpForTrainingRequest": {
             "type": "object",
             "properties": {
@@ -1235,9 +1906,47 @@ const docTemplate = `{
                 }
             }
         },
+        "training.RecurringTraining": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "leadTime": {
+                    "description": "LeadTime — за сколько до даты занятия его нужно создать (материализовать\nв trainings). Например 14 дней — занятие появится в общем списке ровно\nза две недели до начала, а не сразу на весь горизонт вперёд.",
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
         "training.Training": {
             "type": "object",
             "properties": {
+                "bookedCount": {
+                    "description": "BookedCount — сколько активных броней сейчас на этой тренировке.\nСчитается прямым SQL-джойном на таблицу bookings прямо в репозитории\n(см. PostgresTrainingRepository) — так дешевле, чем гонять по одному\nGetParticipants на каждую карточку с фронта. Пакет booking сюда\nнамеренно не импортируется: booking уже импортирует training, так что\nобратная зависимость была бы циклом.",
+                    "type": "integer"
+                },
                 "createdAt": {
                     "type": "string",
                     "format": "date-time",
@@ -1259,6 +1968,32 @@ const docTemplate = `{
                 },
                 "isActive": {
                     "type": "boolean"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                },
+                "recurringTrainingId": {
+                    "description": "RecurringTrainingId — не nil, если тренировка сгенерирована правилом\nрегулярности (см. RecurringTraining). Чисто информационная метка для\nфронта (\"повторяется\"), на бронирование и редактирование не влияет —\nсгенерированную тренировку можно менять/деактивировать как обычную.",
+                    "type": "integer"
+                }
+            }
+        },
+        "training.createRecurringTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "leadTime": {
+                    "type": "integer"
                 },
                 "maxQuantity": {
                     "type": "integer"
@@ -1284,31 +2019,74 @@ const docTemplate = `{
                 }
             }
         },
-        "user.User": {
+        "training.trainingIdRequest": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.updateRecurringTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
                     "type": "string"
                 },
-                "firstName": {
-                    "type": "string"
+                "duration": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
                 },
-                "isAdmin": {
+                "isActive": {
                     "type": "boolean"
                 },
-                "isApproved": {
+                "leadTime": {
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.updateTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
                     "type": "boolean"
                 },
-                "lastName": {
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "user.identityInfo": {
+            "type": "object",
+            "properties": {
+                "externalId": {
                     "type": "string"
                 },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
+                "provider": {
                     "type": "string"
                 }
             }
@@ -1324,11 +2102,64 @@ const docTemplate = `{
                 }
             }
         },
+        "user.profileRequest": {
+            "type": "object",
+            "properties": {
+                "firstName": {
+                    "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
         "user.userIdRequest": {
             "type": "object",
             "properties": {
                 "userId": {
                     "type": "integer"
+                }
+            }
+        },
+        "user.userWithIdentities": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "identities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.identityInfo"
+                    }
+                },
+                "isAdmin": {
+                    "type": "boolean"
+                },
+                "isApproved": {
+                    "type": "boolean"
+                },
+                "isRegistered": {
+                    "description": "IsRegistered — прошёл ли обязательный шаг \"как вас зовут\" при первом\nвходе. Новые аккаунты создаются с false (EnsureProfile) и переводятся в\ntrue первым же успешным UpdateProfile — неважно, вызван он самим юзером\nс экрана регистрации или админом. Чисто фронтовый гейт: на бронирование\nи прочую бизнес-логику не влияет, в отличие от IsApproved.",
+                    "type": "boolean"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         }

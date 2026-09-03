@@ -19,6 +19,28 @@ type userIdRequest struct {
 	UserId int `json:"userId"`
 }
 
+// profileRequest — UserId 0 (или отсутствует) значит "себя". Не-админ может
+// прислать только 0/свой собственный id — проверяется в UserService.UpdateProfile.
+type profileRequest struct {
+	UserId    int    `json:"userId"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
+
+// identityInfo — то, что видно про привязанную платформу: сама платформа и
+// внешний ID на ней. Никаких внутренних полей Identity (id записи и т.п.).
+type identityInfo struct {
+	Provider   string `json:"provider"`
+	ExternalId string `json:"externalId"`
+}
+
+// userWithIdentities — User плюс список всех привязанных платформ (после
+// ResolveAndLink их может быть больше одной).
+type userWithIdentities struct {
+	User
+	Identities []identityInfo `json:"identities"`
+}
+
 func NewUserHandler(service *UserService) *UserHandler {
 	return &UserHandler{UserService: service}
 }
@@ -56,13 +78,143 @@ func (h *UserHandler) GenerateLinkCode(w http.ResponseWriter, r *http.Request) {
 	http2.RespondJSON(w, http.StatusOK, linkCodeResponse{Code: code.Code, ExpiresAt: code.ExpiresAt})
 }
 
+// GetOwnProfile godoc
+// @Summary      Мой профиль
+// @Description  Доступно любому авторизованному пользователю, только про самого себя
+// @Tags         users
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  userWithIdentities
+// @Failure      401  {object}  map[string]string  "не авторизован"
+// @Failure      500  {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /user/me [get]
+func (h *UserHandler) GetOwnProfile(w http.ResponseWriter, r *http.Request) {
+	claims, ok := http2.ClaimsFromContext(r.Context())
+
+	if !ok {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+
+	u, err := h.UserService.GetUser(r.Context(), claims.UserID)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	identities, err := h.UserService.GetIdentities(r.Context(), u.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *u, Identities: infos})
+}
+
+// GetOwnIdentities godoc
+// @Summary      Какие платформы привязаны к моему аккаунту
+// @Description  Доступно любому авторизованному пользователю, только про самого себя
+// @Tags         users
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   identityInfo
+// @Failure      401  {object}  map[string]string  "не авторизован"
+// @Failure      500  {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /user/identities [get]
+func (h *UserHandler) GetOwnIdentities(w http.ResponseWriter, r *http.Request) {
+	claims, ok := http2.ClaimsFromContext(r.Context())
+
+	if !ok {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+
+	identities, err := h.UserService.GetIdentities(r.Context(), claims.UserID)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, infos)
+}
+
+// UpdateProfile godoc
+// @Summary      Изменить имя и фамилию
+// @Description  userId в теле — 0 или отсутствует значит "себя". Обычный пользователь может менять только себя, и только пока не одобрен администратором — после одобрения имя "замораживается" и дальше его может поменять только админ (кому угодно и когда угодно).
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request  body      profileRequest  true  "ID пользователя (необязательно), имя и фамилия"
+// @Success      200      {object}  userWithIdentities
+// @Failure      401      {object}  map[string]string  "не авторизован"
+// @Failure      403      {object}  map[string]string  "чужой профиль или уже одобрен"
+// @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /user/updateProfile [post]
+func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req profileRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "userId/firstName/lastName"})
+		return
+	}
+
+	claims, ok := http2.ClaimsFromContext(r.Context())
+
+	if !ok {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+
+	targetId := req.UserId
+	if targetId == 0 {
+		targetId = claims.UserID
+	}
+
+	updated, err := h.UserService.UpdateProfile(r.Context(), targetId, req.FirstName, req.LastName, claims)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	identities, err := h.UserService.GetIdentities(r.Context(), updated.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
+}
+
 // GetAllUsers godoc
 // @Summary      Получить список пользователей
 // @Description  Только для админов
 // @Tags         users
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {array}   User
+// @Success      200  {array}   userWithIdentities
 // @Failure      401  {object}  map[string]string  "не авторизован"
 // @Failure      403  {object}  map[string]string  "нет прав администратора"
 // @Failure      500  {object}  map[string]string  "внутренняя ошибка сервера"
@@ -75,7 +227,25 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, users)
+	result := make([]userWithIdentities, 0, len(users))
+
+	for _, u := range users {
+		identities, err := h.UserService.GetIdentities(r.Context(), u.Id)
+
+		if err != nil {
+			http2.RespondError(w, err)
+			return
+		}
+
+		infos := make([]identityInfo, 0, len(identities))
+		for _, id := range identities {
+			infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		}
+
+		result = append(result, userWithIdentities{User: u, Identities: infos})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, result)
 }
 
 // GetUserById godoc
@@ -85,7 +255,7 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id   path      int  true  "ID пользователя"
-// @Success      200  {object}  User
+// @Success      200  {object}  userWithIdentities
 // @Failure      401  {object}  map[string]string  "не авторизован"
 // @Failure      403  {object}  map[string]string  "нет прав администратора"
 // @Failure      404  {object}  map[string]string  "пользователь не найден"
@@ -107,7 +277,19 @@ func (h *UserHandler) GetUserById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, u)
+	identities, err := h.UserService.GetIdentities(r.Context(), u.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *u, Identities: infos})
 }
 
 // ApproveUser godoc
@@ -118,7 +300,7 @@ func (h *UserHandler) GetUserById(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        request  body      userIdRequest  true  "ID пользователя"
-// @Success      200      {object}  User
+// @Success      200      {object}  userWithIdentities
 // @Failure      401      {object}  map[string]string  "не авторизован"
 // @Failure      403      {object}  map[string]string  "нет прав администратора"
 // @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
@@ -147,7 +329,19 @@ func (h *UserHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, updated)
+	identities, err := h.UserService.GetIdentities(r.Context(), updated.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
 }
 
 // UnapproveUser godoc
@@ -158,7 +352,7 @@ func (h *UserHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        request  body      userIdRequest  true  "ID пользователя"
-// @Success      200      {object}  User
+// @Success      200      {object}  userWithIdentities
 // @Failure      401      {object}  map[string]string  "не авторизован"
 // @Failure      403      {object}  map[string]string  "нет прав администратора"
 // @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
@@ -187,7 +381,19 @@ func (h *UserHandler) UnapproveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, updated)
+	identities, err := h.UserService.GetIdentities(r.Context(), updated.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
 }
 
 // MakeAdmin godoc
@@ -198,7 +404,7 @@ func (h *UserHandler) UnapproveUser(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        request  body      userIdRequest  true  "ID пользователя"
-// @Success      200      {object}  User
+// @Success      200      {object}  userWithIdentities
 // @Failure      401      {object}  map[string]string  "не авторизован"
 // @Failure      403      {object}  map[string]string  "нет прав администратора"
 // @Failure      409      {object}  map[string]string  "уже администратор"
@@ -228,7 +434,19 @@ func (h *UserHandler) MakeAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, updated)
+	identities, err := h.UserService.GetIdentities(r.Context(), updated.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
 }
 
 // RemoveAdmin godoc
@@ -239,7 +457,7 @@ func (h *UserHandler) MakeAdmin(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        request  body      userIdRequest  true  "ID пользователя"
-// @Success      200      {object}  User
+// @Success      200      {object}  userWithIdentities
 // @Failure      400      {object}  map[string]string  "нельзя снять права с самого себя"
 // @Failure      401      {object}  map[string]string  "не авторизован"
 // @Failure      403      {object}  map[string]string  "нет прав администратора"
@@ -282,7 +500,19 @@ func (h *UserHandler) RemoveAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, updated)
+	identities, err := h.UserService.GetIdentities(r.Context(), updated.Id)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	infos := make([]identityInfo, 0, len(identities))
+	for _, id := range identities {
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+	}
+
+	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
 }
 
 // DeleteUser godoc

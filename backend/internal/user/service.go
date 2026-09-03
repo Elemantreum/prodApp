@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"prodApp/internal/platform/apperrors"
+	http2 "prodApp/internal/platform/http"
 	"time"
 )
 
@@ -24,7 +25,7 @@ type IdentityRepository interface {
 	//Delete(ctx context.Context, identity *Identity) error
 	//FindById(ctx context.Context, id int) (*Identity, error)
 	FindByProviderAndExternalID(ctx context.Context, provider, externalID string) (*Identity, error)
-	//GetAll(ctx context.Context) ([]Identity, error)
+	FindByUserID(ctx context.Context, userID int) ([]Identity, error)
 	Reassign(ctx context.Context, provider, externalID string, newUserID int) error
 	GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error)
 }
@@ -34,14 +35,24 @@ type LinkCodeRepository interface {
 	FindAndDelete(ctx context.Context, code string) (*LinkCode, error)
 }
 
-type UserService struct {
-	userRepo     UserRepository
-	identityRepo IdentityRepository
-	linkCodeRepo LinkCodeRepository
+// BookingChecker — узкий срез booking.BookingService, нужный только для
+// решения "можно ли тихо удалить осиротевший после привязки аккаунт". Не
+// импортируем сам пакет booking напрямую — он уже импортирует user (ради
+// UserRepository), так что было бы cycle; main.go подсовывает сюда
+// *booking.BookingService, который эту сигнатуру уже удовлетворяет.
+type BookingChecker interface {
+	HasBookings(ctx context.Context, userID int) (bool, error)
 }
 
-func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository) *UserService {
-	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo}
+type UserService struct {
+	userRepo       UserRepository
+	identityRepo   IdentityRepository
+	linkCodeRepo   LinkCodeRepository
+	bookingChecker BookingChecker
+}
+
+func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository, bookingChecker BookingChecker) *UserService {
+	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo, bookingChecker: bookingChecker}
 }
 
 const (
@@ -94,8 +105,20 @@ func (s *UserService) ResolveAndLink(ctx context.Context, code, provider, extern
 		return nil, &apperrors.ValidationError{Field: "code: истёк, запросите новый"}
 	}
 
+	// Если эта идентичность уже была на ком-то ДРУГОМ (обычный случай — юзер
+	// открыл вторую платформу до ввода кода, она автосоздала себе отдельный
+	// аккаунт) — запомним его, чтобы после переноса проверить, не осиротел ли.
+	var previousOwnerID int
+	if existing, err := s.identityRepo.FindByProviderAndExternalID(ctx, provider, externalID); err == nil {
+		previousOwnerID = existing.UserId
+	}
+
 	if err := s.identityRepo.Reassign(ctx, provider, externalID, lc.UserId); err != nil {
 		return nil, fmt.Errorf("reassign identity: %w", err)
+	}
+
+	if previousOwnerID != 0 && previousOwnerID != lc.UserId {
+		s.cleanupOrphan(ctx, previousOwnerID)
 	}
 
 	return s.GetUser(ctx, lc.UserId)
@@ -107,6 +130,30 @@ func (s *UserService) GetBatchTgById(ctx context.Context, id []int, provider str
 		return nil, fmt.Errorf("get identity by id: %w", err)
 	}
 	return identity, err
+// cleanupOrphan подчищает аккаунт, оставшийся без единой привязки после
+// ResolveAndLink. Удаляет ТОЛЬКО если на нём нет ни одной брони — Delete
+// каскадно снёс бы их вместе с аккаунтом, а это уже настоящая потеря
+// данных, если юзер успел записаться на что-то до того как решил привязаться.
+// В этом случае лучше молча оставить дубликат — админ увидит его в списке
+// пользователей и разберётся руками. Любая ошибка здесь — best-effort,
+// не должна ломать сам ResolveAndLink (identity уже успешно перенесена).
+func (s *UserService) cleanupOrphan(ctx context.Context, userID int) {
+	remaining, err := s.identityRepo.FindByUserID(ctx, userID)
+	if err != nil || len(remaining) > 0 {
+		return
+	}
+
+	hasBookings, err := s.bookingChecker.HasBookings(ctx, userID)
+	if err != nil || hasBookings {
+		return
+	}
+
+	orphan, err := s.userRepo.FindById(ctx, userID)
+	if err != nil {
+		return
+	}
+
+	_ = s.userRepo.Delete(ctx, orphan)
 }
 
 // EnsureProfile находит пользователя, привязанного к данной платформенной identity,
@@ -127,6 +174,9 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 		LastName:   lastName,
 		IsApproved: false,
 		IsAdmin:    false,
+		// Даже если платформа уже дала имя (Telegram обычно даёт, VK — нет),
+		// заставляем явно пройти шаг регистрации — см. UpdateProfile ниже.
+		IsRegistered: false,
 	}
 
 	createdUser, err := s.userRepo.Create(ctx, newUser)
@@ -263,6 +313,48 @@ func (s *UserService) GetUser(ctx context.Context, id int) (*User, error) {
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 	return user, nil
+}
+
+// GetIdentities возвращает все платформы, привязанные к аккаунту (после
+// ResolveAndLink их может быть больше одной — например telegram + vk).
+func (s *UserService) GetIdentities(ctx context.Context, userID int) ([]Identity, error) {
+	identities, err := s.identityRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list identities: %w", err)
+	}
+	return identities, nil
+}
+
+// UpdateProfile меняет имя/фамилию targetID. Админ может менять кому угодно
+// и когда угодно; обычный юзер — только себя, и только пока не одобрен
+// (после ApproveUser имя "замораживается" — дальше только через админа).
+func (s *UserService) UpdateProfile(ctx context.Context, targetID int, firstName, lastName string, requester *http2.Claims) (*User, error) {
+	user, err := s.userRepo.FindById(ctx, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+
+	if !requester.IsAdmin {
+		if requester.UserID != targetID {
+			return nil, &apperrors.ForbiddenError{Reason: "можно менять только свой профиль"}
+		}
+		if user.IsApproved {
+			return nil, &apperrors.ForbiddenError{Reason: "профиль уже одобрен, изменить имя может только администратор"}
+		}
+	}
+
+	user.FirstName = firstName
+	user.LastName = lastName
+	// Любое успешное сохранение имени — и от самого юзера с обязательного
+	// экрана регистрации, и от админа — закрывает шаг регистрации.
+	user.IsRegistered = true
+
+	updated, err := s.userRepo.Update(ctx, user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return updated, nil
 }
 
 func (service *UserService) ApproveUser(ctx context.Context, id int) error {

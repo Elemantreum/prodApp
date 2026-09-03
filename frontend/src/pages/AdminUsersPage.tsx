@@ -14,6 +14,7 @@ export function AdminUsersPage() {
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ userId: number; action: Action } | null>(null);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,11 +55,28 @@ export function AdminUsersPage() {
   }
 
   function handleDelete(user: User) {
-    if (!window.confirm(`Удалить пользователя «${user.firstName || user.username}»? Это отменит все его брони.`)) {
-      return;
-    }
+    // UserCard already asks for a second click before calling this — удаление
+    // отменит все брони юзера, но повторный native window.confirm() здесь не
+    // нужен (и не работает надёжно в Telegram/VK webview).
     runAction(user, "delete", () => api.deleteUser(user.id));
   }
+
+  async function handleRename(user: User, firstName: string, lastName: string) {
+    setError(null);
+    try {
+      const updated = await api.updateProfile(firstName, lastName, user.id);
+      setUsers((prev) => prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null);
+    } catch (e) {
+      throw new Error(e instanceof ApiError ? e.message : "Не удалось сохранить имя");
+    }
+  }
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredUsers = users?.filter((u) => {
+    if (!normalizedQuery) return true;
+    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
+    return fullName.includes(normalizedQuery) || u.username.toLowerCase().includes(normalizedQuery);
+  });
 
   return (
     <>
@@ -73,19 +91,34 @@ export function AdminUsersPage() {
       {users?.length === 0 && <EmptyState title="Пользователей пока нет" />}
 
       {users && users.length > 0 && (
-        <div className="list">
-          {users.map((u) => (
-            <UserCard
-              key={u.id}
-              user={u}
-              isSelf={u.id === claims?.user_id}
-              busyAction={busy?.userId === u.id ? busy.action : null}
-              onToggleApproved={handleToggleApproved}
-              onToggleAdmin={handleToggleAdmin}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        <>
+          <input
+            type="text"
+            className="search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по имени…"
+          />
+
+          {filteredUsers?.length === 0 && <EmptyState title="Никого не нашлось" hint="Попробуй другой запрос" />}
+
+          {filteredUsers && filteredUsers.length > 0 && (
+            <div className="list">
+              {filteredUsers.map((u) => (
+                <UserCard
+                  key={u.id}
+                  user={u}
+                  isSelf={u.id === claims?.user_id}
+                  busyAction={busy?.userId === u.id ? busy.action : null}
+                  onToggleApproved={handleToggleApproved}
+                  onToggleAdmin={handleToggleAdmin}
+                  onDelete={handleDelete}
+                  onRename={handleRename}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </>
   );
