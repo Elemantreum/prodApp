@@ -14,6 +14,7 @@ export function TrainingsPage() {
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [signingUpId, setSigningUpId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!claims) return;
@@ -58,8 +59,32 @@ export function TrainingsPage() {
     }
   }
 
-  const activeBookedTrainingIds = new Set(
-    myBookings.filter((b) => b.status === "active").map((b) => b.trainingId),
+  async function handleCancel(bookingId: number) {
+    setCancellingId(bookingId);
+    setError(null);
+    try {
+      const cancelled = myBookings.find((b) => b.id === bookingId);
+      await api.cancelBooking(bookingId);
+      setMyBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled" } : b)));
+      // Оптимистично подвинуть счётчик на карточке, не дожидаясь рефетча.
+      if (cancelled) {
+        setTrainings((prev) =>
+          prev
+            ? prev.map((t) =>
+                t.id === cancelled.trainingId ? { ...t, bookedCount: Math.max(0, t.bookedCount - 1) } : t,
+              )
+            : prev,
+        );
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось отписаться");
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  const activeBookingIdByTrainingId = new Map(
+    myBookings.filter((b) => b.status === "active").map((b) => [b.trainingId, b.id]),
   );
 
   return (
@@ -76,20 +101,26 @@ export function TrainingsPage() {
 
       {trainings && trainings.length > 0 && (
         <div className="list">
-          {trainings
-            .filter((t) => t.isActive)
-            .map((t) => (
+          {/* Неактивные тренировки бэк отдаёт только админу (см. TrainingService.GetAll) —
+              обычным пользователям не видны, фильтровать на фронте не нужно. */}
+          {trainings.map((t) => {
+            const myBookingId = activeBookingIdByTrainingId.get(t.id);
+            return (
               <TrainingCard
                 key={t.id}
                 training={t}
                 onSignUp={handleSignUp}
                 signingUp={signingUpId === t.id}
-                alreadyBooked={activeBookedTrainingIds.has(t.id)}
+                myBookingId={myBookingId}
+                onCancel={handleCancel}
+                cancelling={myBookingId != null && cancellingId === myBookingId}
                 onTrainingUpdated={(updated) =>
                   setTrainings((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)) ?? prev)
                 }
+                onTrainingDeleted={(id) => setTrainings((prev) => prev?.filter((x) => x.id !== id) ?? prev)}
               />
-            ))}
+            );
+          })}
         </div>
       )}
     </Layout>

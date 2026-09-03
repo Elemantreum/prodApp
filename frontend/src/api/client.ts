@@ -6,6 +6,7 @@ import type {
   Identity,
   LinkCode,
   Participant,
+  RecurringTraining,
   Training,
   User,
 } from "./types";
@@ -145,6 +146,47 @@ export const api = {
 
   updateTraining(id: number, input: CreateTrainingInput & { isActive: boolean }): Promise<Training> {
     return request<Training>("/trainings/update", {
+      method: "POST",
+      body: JSON.stringify({ id, ...input }),
+    });
+  },
+
+  /** Отказывает (409), если на тренировку есть хоть одна запись — сначала
+   *  нужно её деактивировать через updateTraining. */
+  deleteTraining(id: number): Promise<true> {
+    return request<true>("/trainings/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+  },
+
+  /** anchorDate — дата и время первого занятия; правило само материализует
+   *  его и все последующие еженедельные занятия, как только подходит
+   *  leadTime до каждой из них. */
+  createRecurringTraining(input: {
+    description: string;
+    anchorDate: string;
+    maxQuantity: number;
+    duration: number;
+    leadTime: number;
+  }): Promise<RecurringTraining> {
+    return request<RecurringTraining>("/trainings/recurring/create", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  getRecurringTrainings(): Promise<RecurringTraining[]> {
+    return request<RecurringTraining[] | null>("/trainings/recurring/get").then((r) => r ?? []);
+  },
+
+  /** Правит все поля правила разом, включая isActive — им же правило и
+   *  включается, и выключается. */
+  updateRecurringTraining(
+    id: number,
+    input: { description: string; anchorDate: string; maxQuantity: number; duration: number; leadTime: number; isActive: boolean },
+  ): Promise<RecurringTraining> {
+    return request<RecurringTraining>("/trainings/recurring/update", {
       method: "POST",
       body: JSON.stringify({ id, ...input }),
     });

@@ -84,6 +84,33 @@ definitions:
       trainingId:
         type: integer
     type: object
+  training.RecurringTraining:
+    properties:
+      anchorDate:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      createdAt:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      leadTime:
+        description: |-
+          LeadTime — за сколько до даты занятия его нужно создать (материализовать
+          в trainings). Например 14 дней — занятие появится в общем списке ровно
+          за две недели до начала, а не сразу на весь горизонт вперёд.
+        type: integer
+      maxQuantity:
+        type: integer
+    type: object
   training.Training:
     properties:
       bookedCount:
@@ -113,6 +140,28 @@ definitions:
         type: boolean
       maxQuantity:
         type: integer
+      recurringTrainingId:
+        description: |-
+          RecurringTrainingId — не nil, если тренировка сгенерирована правилом
+          регулярности (см. RecurringTraining). Чисто информационная метка для
+          фронта ("повторяется"), на бронирование и редактирование не влияет —
+          сгенерированную тренировку можно менять/деактивировать как обычную.
+        type: integer
+    type: object
+  training.createRecurringTrainingRequest:
+    properties:
+      anchorDate:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      leadTime:
+        type: integer
+      maxQuantity:
+        type: integer
     type: object
   training.createTrainingRequest:
     properties:
@@ -123,6 +172,30 @@ definitions:
       description:
         type: string
       duration:
+        type: integer
+      maxQuantity:
+        type: integer
+    type: object
+  training.trainingIdRequest:
+    properties:
+      id:
+        type: integer
+    type: object
+  training.updateRecurringTrainingRequest:
+    properties:
+      anchorDate:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      leadTime:
         type: integer
       maxQuantity:
         type: integer
@@ -610,9 +683,60 @@ paths:
       summary: Создать тренировку
       tags:
       - trainings
+  /trainings/delete:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. Отказывает (409), если на тренировку есть хоть
+        одна запись — сначала деактивируйте её через UpdateTraining.
+      parameters:
+      - description: ID тренировки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/training.trainingIdRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: на тренировку есть записи
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Удалить тренировку
+      tags:
+      - trainings
   /trainings/get:
     get:
-      description: Только для админов
+      description: Админу — все тренировки, включая неактивные. Остальным авторизованным
+        пользователям — только активные.
       produces:
       - application/json
       responses:
@@ -624,12 +748,6 @@ paths:
             type: array
         "401":
           description: не авторизован
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "403":
-          description: нет прав администратора
           schema:
             additionalProperties:
               type: string
@@ -684,6 +802,130 @@ paths:
       - BearerAuth: []
       - OAuth2AccessCode: []
       summary: Получить тренировку по ID
+      tags:
+      - trainings
+  /trainings/recurring/create:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. AnchorDate — дата и время первого занятия,
+        дальше повторяется каждые 7 дней от неё. Первые занятия материализуются сразу.
+      parameters:
+      - description: Данные правила
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/training.createRecurringTrainingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/training.RecurringTraining'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Создать регулярную тренировку
+      tags:
+      - trainings
+  /trainings/recurring/get:
+    get:
+      description: Только для админов
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/training.RecurringTraining'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Список правил регулярных тренировок
+      tags:
+      - trainings
+  /trainings/recurring/update:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. Тем же полем isActive правило можно как остановить,
+        так и снова включить.
+      parameters:
+      - description: Изменённые данные правила
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/training.updateRecurringTrainingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/training.RecurringTraining'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Изменить регулярную тренировку
       tags:
       - trainings
   /trainings/update:

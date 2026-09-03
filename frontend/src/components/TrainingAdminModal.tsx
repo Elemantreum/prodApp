@@ -19,12 +19,13 @@ interface Props {
   training: Training;
   onClose: () => void;
   onUpdated: (training: Training) => void;
+  onDeleted: (id: number) => void;
 }
 
 /** Всплывающее окно администратора на карточке тренировки: редактирование
- *  самой тренировки сверху, отметка посещаемости по каждой записи снизу.
- *  Открывается только для админов (см. TrainingCard). */
-export function TrainingAdminModal({ training, onClose, onUpdated }: Props) {
+ *  самой тренировки сверху, отметка посещаемости по каждой записи, удаление
+ *  снизу. Открывается только для админов (см. TrainingCard). */
+export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: Props) {
   const [description, setDescription] = useState(training.description);
   const [date, setDate] = useState(isoToLocalDateTimeInput(training.date));
   const [maxQuantity, setMaxQuantity] = useState(training.maxQuantity);
@@ -37,6 +38,12 @@ export function TrainingAdminModal({ training, onClose, onUpdated }: Props) {
   const [bookings, setBookings] = useState<BookingDetail[] | null>(null);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<number | null>(null);
+
+  // window.confirm() ненадёжен внутри Telegram/VK webview — двухшаговое
+  // подтверждение прямо в UI работает везде (см. UserCard).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadBookings = useCallback(async () => {
     setBookingsError(null);
@@ -70,6 +77,27 @@ export function TrainingAdminModal({ training, onClose, onUpdated }: Props) {
       setSaveError(e instanceof ApiError ? e.message : "Не удалось сохранить");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteClick() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteTraining(training.id);
+      onDeleted(training.id);
+    } catch (e) {
+      // 409 здесь означает конкретно "на тренировку есть записи" — бэк уже
+      // формулирует это по-человечески (см. TrainingService.DeleteTraining).
+      setDeleteError(e instanceof ApiError ? e.message : "Не удалось удалить");
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -157,7 +185,6 @@ export function TrainingAdminModal({ training, onClose, onUpdated }: Props) {
                   <li key={b.bookingId} className="attendance-row">
                     <div className="attendance-row__info">
                       <div className="participants__name">{fullName || "Без имени"}</div>
-                      <div className="participants__username">{b.username}</div>
                       <span className={`badge badge--${b.status}`}>{STATUS_LABEL[b.status]}</span>
                     </div>
                     {b.status !== "cancelled" && (
@@ -184,6 +211,25 @@ export function TrainingAdminModal({ training, onClose, onUpdated }: Props) {
                 );
               })}
             </ul>
+          )}
+        </div>
+
+        <div className="modal-section">
+          <h3>Опасная зона</h3>
+          {deleteError && <ErrorBanner message={deleteError} />}
+          {confirmingDelete ? (
+            <div className="user-card__actions-row">
+              <Button variant="secondary" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
+                Отмена
+              </Button>
+              <Button variant="danger" loading={deleting} onClick={handleDeleteClick}>
+                Точно удалить?
+              </Button>
+            </div>
+          ) : (
+            <Button variant="danger" onClick={handleDeleteClick}>
+              Удалить тренировку
+            </Button>
           )}
         </div>
       </div>

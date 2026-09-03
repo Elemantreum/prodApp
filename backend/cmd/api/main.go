@@ -66,7 +66,11 @@ func main() {
 
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
 	trainingService := training.NewTrainingService(psqlTrainingRepo)
-	trainingHandler := training.NewTrainingHandler(trainingService)
+
+	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
+	recurringService := training.NewRecurringService(psqlRecurringRepo, psqlTrainingRepo)
+
+	trainingHandler := training.NewTrainingHandler(trainingService, recurringService)
 
 	psqlUserRepo := user.NewPostgresUserRepository(pool)
 	psqlIdentityRepo := user.NewPostgresIdentityRepository(pool)
@@ -117,6 +121,10 @@ func main() {
 					r.Use(auth.RequireAdmin)
 					r.Post("/create", trainingHandler.CreateTraining)
 					r.Post("/update", trainingHandler.UpdateTraining)
+					r.Post("/delete", trainingHandler.DeleteTraining)
+					r.Post("/recurring/create", trainingHandler.CreateRecurringTraining)
+					r.Get("/recurring/get", trainingHandler.GetRecurringTrainings)
+					r.Post("/recurring/update", trainingHandler.UpdateRecurringTraining)
 				})
 				r.Get("/get/{id}", trainingHandler.GetTrainingById)
 				r.Get("/get", trainingHandler.GetAllTrainings)
@@ -165,6 +173,50 @@ func main() {
 		err := srv.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			panic(err)
+		}
+	}()
+
+	// Регулярные тренировки материализуются, а не считаются на лету: каждое
+	// сгенерированное занятие — обычная строка в trainings, на которую можно
+	// записаться/отредактировать/отметить посещаемость как на любую другую.
+	// Идемпотентно (ON CONFLICT DO NOTHING в репозитории), так что не страшно
+	// звать чаще, чем реально нужно — лишний тик просто ничего не делает.
+	go func() {
+		generate := func() {
+			if err := recurringService.GenerateOccurrences(context.Background()); err != nil {
+				log.Printf("recurring trainings: generate occurrences: %v", err)
+			}
+		}
+
+		generate() // сразу при старте — не ждать первого тика после деплоя
+
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			generate()
+		}
+	}()
+
+	// Прошедшие тренировки сами становятся неактивными — не показываются
+	// обычным пользователям (см. TrainingService.GetAll), но остаются
+	// доступны админу как история. Тикаем часто (не 6 часов, как у
+	// регулярных тренировок) — иначе тренировка ещё долго после начала
+	// выглядела бы как открытая для записи в списке. CreateBooking всё равно
+	// не полагается только на этот тикер — проверяет дату сам, так что окно
+	// между тиками ничем не рискует, только визуально.
+	go func() {
+		deactivate := func() {
+			if err := trainingService.DeactivatePastTrainings(context.Background()); err != nil {
+				log.Printf("trainings: deactivate past: %v", err)
+			}
+		}
+
+		deactivate()
+
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			deactivate()
 		}
 	}()
 

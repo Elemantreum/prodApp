@@ -13,14 +13,31 @@ interface Props {
   training: Training;
   onSignUp: (id: number) => void;
   signingUp: boolean;
-  alreadyBooked: boolean;
+  /** Id активной брони текущего юзера на эту тренировку, если есть —
+   *  определяет режим кнопки: "Записаться" vs "Отписаться". */
+  myBookingId?: number;
+  onCancel: (bookingId: number) => void;
+  cancelling: boolean;
   /** Опционально — только если родитель хочет получать актуальную
    *  тренировку после того, как админ отредактирует её в модалке. */
   onTrainingUpdated?: (training: Training) => void;
+  /** Опционально — только если родитель хочет убрать карточку из списка
+   *  после того, как админ удалит тренировку в модалке. */
+  onTrainingDeleted?: (id: number) => void;
 }
 
-export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked, onTrainingUpdated }: Props) {
+export function TrainingCard({
+  training,
+  onSignUp,
+  signingUp,
+  myBookingId,
+  onCancel,
+  cancelling,
+  onTrainingUpdated,
+  onTrainingDeleted,
+}: Props) {
   const { claims } = useAuth();
+  const isPast = new Date(training.date).getTime() < Date.now();
   const [expanded, setExpanded] = useState(false);
   const [participants, setParticipants] = useState<Participant[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,19 +69,35 @@ export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked, onT
     <div className="card training-card">
       <div className="training-card__row">
         <div className="card__body">
-          <div className="card__title">{training.description}</div>
+          <div className="card__title">
+            {training.description}
+            {training.recurringTrainingId != null && (
+              <span className="training-card__recurring" title="Повторяется каждую неделю">
+                🔁
+              </span>
+            )}
+          </div>
+          {/* Бэк отдаёт неактивные тренировки только админу (см. TrainingsPage) —
+              значит если она тут и isActive=false, показывать её видит только он. */}
+          {!training.isActive && <span className="badge badge--cancelled">Неактивна, скрыта от пользователей</span>}
           <div className="card__meta">{formatDateTime(training.date)}</div>
           <div className="card__meta">{formatDurationNs(training.duration)}</div>
           <OccupancyBar booked={training.bookedCount} max={training.maxQuantity} />
         </div>
-        <Button
-          variant={alreadyBooked ? "secondary" : "primary"}
-          disabled={alreadyBooked}
-          loading={signingUp}
-          onClick={() => onSignUp(training.id)}
-        >
-          {alreadyBooked ? "Вы записаны" : "Записаться"}
-        </Button>
+        {myBookingId != null ? (
+          <Button variant="danger" loading={cancelling} onClick={() => onCancel(myBookingId)}>
+            Отписаться
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            disabled={isPast}
+            loading={signingUp}
+            onClick={() => onSignUp(training.id)}
+          >
+            {isPast ? "Тренировка прошла" : "Записаться"}
+          </Button>
+        )}
       </div>
 
       <div className="training-card__toolbar">
@@ -83,6 +116,10 @@ export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked, onT
           training={training}
           onClose={() => setAdminOpen(false)}
           onUpdated={(updated) => onTrainingUpdated?.(updated)}
+          onDeleted={(id) => {
+            setAdminOpen(false);
+            onTrainingDeleted?.(id);
+          }}
         />
       )}
 
@@ -102,7 +139,6 @@ export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked, onT
                 return (
                   <li key={p.userId}>
                     <div className="participants__name">{fullName || "Без имени"}</div>
-                    <div className="participants__username">{p.username}</div>
                   </li>
                 );
               })}

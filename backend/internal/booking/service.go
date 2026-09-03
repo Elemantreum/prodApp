@@ -71,10 +71,26 @@ func (service *BookingService) CreateBooking(ctx context.Context, userId int, tr
 		return nil, &apperrors.ForbiddenError{Reason: "аккаунт ещё не одобрен администратором"}
 	}
 
-	_, err = service.trainingRepo.FindById(ctx, trainingId)
+	tr, err := service.trainingRepo.FindById(ctx, trainingId)
 
 	if err != nil {
 		return nil, fmt.Errorf("training with id %v not found: %w", trainingId, err)
+	}
+
+	// Неактивная тренировка (в том числе автоматически деактивированная как
+	// прошедшая — см. TrainingService.DeactivatePastTrainings) не показывается
+	// обычным пользователям в списке, но проверяем и здесь на случай гонки
+	// (тренировка стала неактивной между тем как список загрузился и юзер
+	// нажал "Записаться") или прямого запроса по известному id.
+	if !tr.IsActive {
+		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "тренировка неактивна"}
+	}
+
+	// Дата — источник истины сам по себе, а не только через IsActive: если
+	// админ по какой-то причине держит прошедшую тренировку активной, всё
+	// равно нельзя записаться на то, что уже случилось.
+	if tr.Date.Before(time.Now()) {
+		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "тренировка уже прошла"}
 	}
 
 	var booking Booking = Booking{UserId: userId, TrainingId: trainingId}
