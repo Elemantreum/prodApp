@@ -632,6 +632,84 @@ const docTemplate = `{
                 }
             }
         },
+        "/trainings/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. Отказывает (409), если на тренировку есть хоть одна запись — сначала деактивируйте её через UpdateTraining.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Удалить тренировку",
+                "parameters": [
+                    {
+                        "description": "ID тренировки",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.trainingIdRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "на тренировку есть записи",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/trainings/get": {
             "get": {
                 "security": [
@@ -642,7 +720,7 @@ const docTemplate = `{
                         "OAuth2AccessCode": []
                     }
                 ],
-                "description": "Только для админов",
+                "description": "Админу — все тренировки, включая неактивные. Остальным авторизованным пользователям — только активные.",
                 "produces": [
                     "application/json"
                 ],
@@ -662,15 +740,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "не авторизован",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "нет прав администратора",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -722,6 +791,202 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/training.Training"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/recurring/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. AnchorDate — дата и время первого занятия, дальше повторяется каждые 7 дней от неё. Первые занятия материализуются сразу.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Создать регулярную тренировку",
+                "parameters": [
+                    {
+                        "description": "Данные правила",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.createRecurringTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.RecurringTraining"
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/recurring/get": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Список правил регулярных тренировок",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/training.RecurringTraining"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "нет прав администратора",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trainings/recurring/update": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "OAuth2AccessCode": []
+                    }
+                ],
+                "description": "Только для админов. Тем же полем isActive правило можно как остановить, так и снова включить.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trainings"
+                ],
+                "summary": "Изменить регулярную тренировку",
+                "parameters": [
+                    {
+                        "description": "Изменённые данные правила",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.updateRecurringTrainingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/training.RecurringTraining"
                         }
                     },
                     "401": {
@@ -1641,6 +1906,40 @@ const docTemplate = `{
                 }
             }
         },
+        "training.RecurringTraining": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "leadTime": {
+                    "description": "LeadTime — за сколько до даты занятия его нужно создать (материализовать\nв trainings). Например 14 дней — занятие появится в общем списке ровно\nза две недели до начала, а не сразу на весь горизонт вперёд.",
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
         "training.Training": {
             "type": "object",
             "properties": {
@@ -1672,6 +1971,32 @@ const docTemplate = `{
                 },
                 "maxQuantity": {
                     "type": "integer"
+                },
+                "recurringTrainingId": {
+                    "description": "RecurringTrainingId — не nil, если тренировка сгенерирована правилом\nрегулярности (см. RecurringTraining). Чисто информационная метка для\nфронта (\"повторяется\"), на бронирование и редактирование не влияет —\nсгенерированную тренировку можно менять/деактивировать как обычную.",
+                    "type": "integer"
+                }
+            }
+        },
+        "training.createRecurringTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "leadTime": {
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
                 }
             }
         },
@@ -1687,6 +2012,42 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "duration": {
+                    "type": "integer"
+                },
+                "maxQuantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.trainingIdRequest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.updateRecurringTrainingRequest": {
+            "type": "object",
+            "properties": {
+                "anchorDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2002-10-02T15:00:00Z"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "leadTime": {
                     "type": "integer"
                 },
                 "maxQuantity": {

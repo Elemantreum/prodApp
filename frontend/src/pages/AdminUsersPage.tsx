@@ -14,6 +14,7 @@ export function AdminUsersPage() {
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ userId: number; action: Action } | null>(null);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -70,6 +71,13 @@ export function AdminUsersPage() {
     }
   }
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredUsers = users?.filter((u) => {
+    if (!normalizedQuery) return true;
+    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
+    return fullName.includes(normalizedQuery) || u.username.toLowerCase().includes(normalizedQuery);
+  });
+
   return (
     <>
       {error && <ErrorBanner message={error} onRetry={load} />}
@@ -83,20 +91,34 @@ export function AdminUsersPage() {
       {users?.length === 0 && <EmptyState title="Пользователей пока нет" />}
 
       {users && users.length > 0 && (
-        <div className="list">
-          {users.map((u) => (
-            <UserCard
-              key={u.id}
-              user={u}
-              isSelf={u.id === claims?.user_id}
-              busyAction={busy?.userId === u.id ? busy.action : null}
-              onToggleApproved={handleToggleApproved}
-              onToggleAdmin={handleToggleAdmin}
-              onDelete={handleDelete}
-              onRename={handleRename}
-            />
-          ))}
-        </div>
+        <>
+          <input
+            type="text"
+            className="search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по имени…"
+          />
+
+          {filteredUsers?.length === 0 && <EmptyState title="Никого не нашлось" hint="Попробуй другой запрос" />}
+
+          {filteredUsers && filteredUsers.length > 0 && (
+            <div className="list">
+              {filteredUsers.map((u) => (
+                <UserCard
+                  key={u.id}
+                  user={u}
+                  isSelf={u.id === claims?.user_id}
+                  busyAction={busy?.userId === u.id ? busy.action : null}
+                  onToggleApproved={handleToggleApproved}
+                  onToggleAdmin={handleToggleAdmin}
+                  onDelete={handleDelete}
+                  onRename={handleRename}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </>
   );

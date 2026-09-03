@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleAdmin, onDelete, onRename }: Props) {
-  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username;
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Без имени";
 
   // window.confirm() is unreliable inside Telegram/VK webviews (silently
   // no-ops or throws in a lot of client versions) — a plain click-twice
@@ -68,7 +68,6 @@ export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleA
         <div className="card__title">
           {displayName} {isSelf && <span className="user-card__you">(вы)</span>}
         </div>
-        <div className="card__meta">{user.username}</div>
         <div className="card__meta">
           Платформы:{" "}
           {user.identities.length === 0

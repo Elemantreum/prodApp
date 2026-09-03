@@ -48,6 +48,7 @@ func (handler *BookingHandler) SignupForTraining(w http.ResponseWriter, r *http.
 
 	if err != nil {
 		http2.RespondError(w, &apperrors.ValidationError{Field: "signUpForTrainingRequest"})
+		return
 	}
 
 	claims, ok := http2.ClaimsFromContext(r.Context())
@@ -61,6 +62,7 @@ func (handler *BookingHandler) SignupForTraining(w http.ResponseWriter, r *http.
 
 	if err != nil {
 		http2.RespondError(w, err)
+		return
 	}
 
 	http2.RespondJSON(w, http.StatusOK, saved)
@@ -97,6 +99,7 @@ func (handler *BookingHandler) GetBookingsByUserId(w http.ResponseWriter, r *htt
 
 	if err != nil {
 		http2.RespondError(w, err)
+		return
 	}
 
 	http2.RespondJSON(w, http.StatusOK, bookings)
@@ -216,6 +219,7 @@ func (handler *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Requ
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http2.RespondError(w, &apperrors.ValidationError{Field: "cancelBookingRequest"})
+		return
 	}
 
 	claims, ok := http2.ClaimsFromContext(r.Context())
@@ -229,6 +233,7 @@ func (handler *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Requ
 
 	if err != nil {
 		http2.RespondError(w, err)
+		return
 	}
 
 	http2.RespondJSON(w, http.StatusOK, true)
