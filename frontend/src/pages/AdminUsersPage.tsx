@@ -54,10 +54,20 @@ export function AdminUsersPage() {
   }
 
   function handleDelete(user: User) {
-    if (!window.confirm(`Удалить пользователя «${user.firstName || user.username}»? Это отменит все его брони.`)) {
-      return;
-    }
+    // UserCard already asks for a second click before calling this — удаление
+    // отменит все брони юзера, но повторный native window.confirm() здесь не
+    // нужен (и не работает надёжно в Telegram/VK webview).
     runAction(user, "delete", () => api.deleteUser(user.id));
+  }
+
+  async function handleRename(user: User, firstName: string, lastName: string) {
+    setError(null);
+    try {
+      const updated = await api.updateProfile(firstName, lastName, user.id);
+      setUsers((prev) => prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null);
+    } catch (e) {
+      throw new Error(e instanceof ApiError ? e.message : "Не удалось сохранить имя");
+    }
   }
 
   return (
@@ -83,6 +93,7 @@ export function AdminUsersPage() {
               onToggleApproved={handleToggleApproved}
               onToggleAdmin={handleToggleAdmin}
               onDelete={handleDelete}
+              onRename={handleRename}
             />
           ))}
         </div>

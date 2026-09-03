@@ -71,12 +71,15 @@ func main() {
 	psqlUserRepo := user.NewPostgresUserRepository(pool)
 	psqlIdentityRepo := user.NewPostgresIdentityRepository(pool)
 	psqlLinkCodeRepo := user.NewPostgresLinkCodeRepository(pool)
-	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo)
-	userHandler := user.NewUserHandler(userService)
 
 	psqlBookingRepo := booking.NewPostgresBookingRepository(pool)
 	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo)
 	bookingHandler := booking.NewBookingHandler(bookingService)
+
+	// bookingService реализует user.BookingChecker — используется, чтобы не
+	// удалять осиротевший после привязки аккаунт, если на нём есть брони.
+	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo, bookingService)
+	userHandler := user.NewUserHandler(userService)
 
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
@@ -113,6 +116,7 @@ func main() {
 				r.Group(func(r chi.Router) {
 					r.Use(auth.RequireAdmin)
 					r.Post("/create", trainingHandler.CreateTraining)
+					r.Post("/update", trainingHandler.UpdateTraining)
 				})
 				r.Get("/get/{id}", trainingHandler.GetTrainingById)
 				r.Get("/get", trainingHandler.GetAllTrainings)
@@ -122,9 +126,17 @@ func main() {
 				r.Get("/getByTrainingId", bookingHandler.GetParticipants)
 				r.Post("/signUp", bookingHandler.SignupForTraining)
 				r.Post("/cancel", bookingHandler.CancelBooking)
+				r.Group(func(r chi.Router) {
+					r.Use(auth.RequireAdmin)
+					r.Get("/admin/getByTrainingId", bookingHandler.GetTrainingBookings)
+					r.Post("/setAttendance", bookingHandler.SetAttendance)
+				})
 			})
 			r.Route("/user", func(r chi.Router) {
 				r.Post("/linkCode", userHandler.GenerateLinkCode)
+				r.Get("/me", userHandler.GetOwnProfile)
+				r.Get("/identities", userHandler.GetOwnIdentities)
+				r.Post("/updateProfile", userHandler.UpdateProfile)
 
 				r.Group(func(r chi.Router) {
 					r.Use(auth.RequireAdmin)

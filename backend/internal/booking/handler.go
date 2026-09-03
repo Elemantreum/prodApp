@@ -18,6 +18,10 @@ type signUpForTrainingRequest struct {
 type cancelBookingRequest struct {
 	BookingId int `json:"bookingId"`
 }
+type setAttendanceRequest struct {
+	BookingId int  `json:"bookingId"`
+	Attended  bool `json:"attended"`
+}
 
 func NewBookingHandler(service *BookingService) *BookingHandler {
 	return &BookingHandler{BookingService: service}
@@ -125,6 +129,71 @@ func (handler *BookingHandler) GetParticipants(w http.ResponseWriter, r *http.Re
 	}
 
 	http2.RespondJSON(w, http.StatusOK, participants)
+}
+
+// GetTrainingBookings godoc
+// @Summary      Все записи на тренировку (админ)
+// @Description  Только для админов. В отличие от getByTrainingId — включает отменённые записи и id брони.
+// @Tags         booking
+// @Produce      json
+// @Security     BearerAuth
+// @Security     OAuth2AccessCode
+// @Param        trainingId  query     int  true  "ID тренировки"
+// @Success      200         {array}   BookingDetail
+// @Failure      401         {object}  map[string]string  "не авторизован"
+// @Failure      403         {object}  map[string]string  "нет прав администратора"
+// @Failure      500         {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /booking/admin/getByTrainingId [get]
+func (handler *BookingHandler) GetTrainingBookings(w http.ResponseWriter, r *http.Request) {
+	trainingId, err := strconv.Atoi(r.URL.Query().Get("trainingId"))
+
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "trainingId"})
+		return
+	}
+
+	bookings, err := handler.BookingService.GetTrainingBookings(r.Context(), trainingId)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	http2.RespondJSON(w, http.StatusOK, bookings)
+}
+
+// SetAttendance godoc
+// @Summary      Отметить посещаемость (админ)
+// @Description  Только для админов. Переводит бронь в completed (пришёл) или not_completed (не пришёл); отменённую бронь трогать нельзя.
+// @Tags         booking
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Security     OAuth2AccessCode
+// @Param        request  body      setAttendanceRequest  true  "ID брони и признак посещения"
+// @Success      200      {object}  Booking
+// @Failure      401      {object}  map[string]string  "не авторизован"
+// @Failure      403      {object}  map[string]string  "нет прав администратора"
+// @Failure      409      {object}  map[string]string  "бронь отменена"
+// @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /booking/setAttendance [post]
+func (handler *BookingHandler) SetAttendance(w http.ResponseWriter, r *http.Request) {
+	var req setAttendanceRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "setAttendanceRequest"})
+		return
+	}
+
+	updated, err := handler.BookingService.SetAttendance(r.Context(), req.BookingId, req.Attended)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	http2.RespondJSON(w, http.StatusOK, updated)
 }
 
 // CancelBooking godoc

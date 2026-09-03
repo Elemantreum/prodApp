@@ -1,4 +1,14 @@
-import type { AuthResponse, Booking, CreateTrainingInput, LinkCode, Participant, Training, User } from "./types";
+import type {
+  AuthResponse,
+  Booking,
+  BookingDetail,
+  CreateTrainingInput,
+  Identity,
+  LinkCode,
+  Participant,
+  Training,
+  User,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
@@ -133,12 +143,35 @@ export const api = {
     });
   },
 
+  updateTraining(id: number, input: CreateTrainingInput & { isActive: boolean }): Promise<Training> {
+    return request<Training>("/trainings/update", {
+      method: "POST",
+      body: JSON.stringify({ id, ...input }),
+    });
+  },
+
   getBookingsByUserId(userId: number): Promise<Booking[]> {
     return request<Booking[] | null>(`/booking/getByUserId?userId=${userId}`).then((r) => r ?? []);
   },
 
   getTrainingParticipants(trainingId: number): Promise<Participant[]> {
     return request<Participant[] | null>(`/booking/getByTrainingId?trainingId=${trainingId}`).then((r) => r ?? []);
+  },
+
+  /** Все записи на тренировку, включая отменённые — только для админа.
+   *  В отличие от getTrainingParticipants несёт id брони и статус, чтобы
+   *  тут же можно было отметить посещаемость. */
+  getTrainingBookings(trainingId: number): Promise<BookingDetail[]> {
+    return request<BookingDetail[] | null>(`/booking/admin/getByTrainingId?trainingId=${trainingId}`).then(
+      (r) => r ?? [],
+    );
+  },
+
+  setAttendance(bookingId: number, attended: boolean): Promise<Booking> {
+    return request<Booking>("/booking/setAttendance", {
+      method: "POST",
+      body: JSON.stringify({ bookingId, attended }),
+    });
   },
 
   signUp(trainingId: number): Promise<Booking> {
@@ -157,6 +190,25 @@ export const api = {
 
   getUsers(): Promise<User[]> {
     return request<User[] | null>("/user/get").then((r) => r ?? []);
+  },
+
+  /** My own profile — not in the JWT (that only carries user_id/is_admin/is_approved). */
+  getOwnProfile(): Promise<User> {
+    return request<User>("/user/me");
+  },
+
+  /** All platforms linked to *my* account. */
+  getOwnIdentities(): Promise<Identity[]> {
+    return request<Identity[] | null>("/user/identities").then((r) => r ?? []);
+  },
+
+  /** Omit userId to update your own profile. Non-admins can only target
+   *  themselves, and only while unapproved — backend enforces both. */
+  updateProfile(firstName: string, lastName: string, userId?: number): Promise<User> {
+    return request<User>("/user/updateProfile", {
+      method: "POST",
+      body: JSON.stringify({ userId, firstName, lastName }),
+    });
   },
 
   approveUser(userId: number): Promise<User> {

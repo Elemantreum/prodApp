@@ -1,23 +1,31 @@
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Participant, Training } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
 import { formatDateTime } from "../utils/date";
 import { formatDurationNs } from "../utils/duration";
 import { Button } from "./Button";
+import { OccupancyBar } from "./OccupancyBar";
 import { Spinner } from "./Spinner";
+import { TrainingAdminModal } from "./TrainingAdminModal";
 
 interface Props {
   training: Training;
   onSignUp: (id: number) => void;
   signingUp: boolean;
   alreadyBooked: boolean;
+  /** Опционально — только если родитель хочет получать актуальную
+   *  тренировку после того, как админ отредактирует её в модалке. */
+  onTrainingUpdated?: (training: Training) => void;
 }
 
-export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked }: Props) {
+export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked, onTrainingUpdated }: Props) {
+  const { claims } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [participants, setParticipants] = useState<Participant[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   async function toggleParticipants() {
     if (expanded) {
@@ -46,9 +54,8 @@ export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked }: P
         <div className="card__body">
           <div className="card__title">{training.description}</div>
           <div className="card__meta">{formatDateTime(training.date)}</div>
-          <div className="card__meta">
-            {formatDurationNs(training.duration)} · до {training.maxQuantity} чел.
-          </div>
+          <div className="card__meta">{formatDurationNs(training.duration)}</div>
+          <OccupancyBar booked={training.bookedCount} max={training.maxQuantity} />
         </div>
         <Button
           variant={alreadyBooked ? "secondary" : "primary"}
@@ -60,9 +67,24 @@ export function TrainingCard({ training, onSignUp, signingUp, alreadyBooked }: P
         </Button>
       </div>
 
-      <button className="training-card__toggle" onClick={toggleParticipants}>
-        {expanded ? "Скрыть участников" : "Кто записан"}
-      </button>
+      <div className="training-card__toolbar">
+        <button className="training-card__toggle" onClick={toggleParticipants}>
+          {expanded ? "Скрыть участников" : "Кто записан"}
+        </button>
+        {claims?.is_admin && (
+          <button className="training-card__toggle" onClick={() => setAdminOpen(true)}>
+            Управление
+          </button>
+        )}
+      </div>
+
+      {adminOpen && (
+        <TrainingAdminModal
+          training={training}
+          onClose={() => setAdminOpen(false)}
+          onUpdated={(updated) => onTrainingUpdated?.(updated)}
+        />
+      )}
 
       {expanded && (
         <div className="participants">

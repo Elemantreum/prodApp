@@ -25,6 +25,23 @@ definitions:
       userId:
         type: integer
     type: object
+  booking.BookingDetail:
+    properties:
+      bookingDate:
+        type: string
+      bookingId:
+        type: integer
+      firstName:
+        type: string
+      lastName:
+        type: string
+      status:
+        $ref: '#/definitions/booking.BookingStatus'
+      userId:
+        type: integer
+      username:
+        type: string
+    type: object
   booking.BookingStatus:
     enum:
     - 0
@@ -55,6 +72,13 @@ definitions:
       bookingId:
         type: integer
     type: object
+  booking.setAttendanceRequest:
+    properties:
+      attended:
+        type: boolean
+      bookingId:
+        type: integer
+    type: object
   booking.signUpForTrainingRequest:
     properties:
       trainingId:
@@ -62,6 +86,15 @@ definitions:
     type: object
   training.Training:
     properties:
+      bookedCount:
+        description: |-
+          BookedCount — сколько активных броней сейчас на этой тренировке.
+          Считается прямым SQL-джойном на таблицу bookings прямо в репозитории
+          (см. PostgresTrainingRepository) — так дешевле, чем гонять по одному
+          GetParticipants на каждую карточку с фронта. Пакет booking сюда
+          намеренно не импортируется: booking уже импортирует training, так что
+          обратная зависимость была бы циклом.
+        type: integer
       createdAt:
         example: "2002-10-02T15:00:00Z"
         format: date-time
@@ -94,23 +127,28 @@ definitions:
       maxQuantity:
         type: integer
     type: object
-  user.User:
+  training.updateTrainingRequest:
     properties:
-      createdAt:
+      date:
+        example: "2002-10-02T15:00:00Z"
+        format: date-time
         type: string
-      firstName:
+      description:
         type: string
+      duration:
+        type: integer
       id:
         type: integer
-      isAdmin:
+      isActive:
         type: boolean
-      isApproved:
-        type: boolean
-      lastName:
+      maxQuantity:
+        type: integer
+    type: object
+  user.identityInfo:
+    properties:
+      externalId:
         type: string
-      updatedAt:
-        type: string
-      username:
+      provider:
         type: string
     type: object
   user.linkCodeResponse:
@@ -120,10 +158,50 @@ definitions:
       expiresAt:
         type: string
     type: object
+  user.profileRequest:
+    properties:
+      firstName:
+        type: string
+      lastName:
+        type: string
+      userId:
+        type: integer
+    type: object
   user.userIdRequest:
     properties:
       userId:
         type: integer
+    type: object
+  user.userWithIdentities:
+    properties:
+      createdAt:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: integer
+      identities:
+        items:
+          $ref: '#/definitions/user.identityInfo'
+        type: array
+      isAdmin:
+        type: boolean
+      isApproved:
+        type: boolean
+      isRegistered:
+        description: |-
+          IsRegistered — прошёл ли обязательный шаг "как вас зовут" при первом
+          входе. Новые аккаунты создаются с false (EnsureProfile) и переводятся в
+          true первым же успешным UpdateProfile — неважно, вызван он самим юзером
+          с экрана регистрации или админом. Чисто фронтовый гейт: на бронирование
+          и прочую бизнес-логику не влияет, в отличие от IsApproved.
+        type: boolean
+      lastName:
+        type: string
+      updatedAt:
+        type: string
+      username:
+        type: string
     type: object
 host: localhost:8080
 info:
@@ -230,6 +308,49 @@ paths:
       summary: Привязать VK к существующему аккаунту
       tags:
       - auth
+  /booking/admin/getByTrainingId:
+    get:
+      description: Только для админов. В отличие от getByTrainingId — включает отменённые
+        записи и id брони.
+      parameters:
+      - description: ID тренировки
+        in: query
+        name: trainingId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/booking.BookingDetail'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Все записи на тренировку (админ)
+      tags:
+      - booking
   /booking/cancel:
     post:
       consumes:
@@ -351,6 +472,56 @@ paths:
       - BearerAuth: []
       - OAuth2AccessCode: []
       summary: Получить бронирования пользователя
+      tags:
+      - booking
+  /booking/setAttendance:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов. Переводит бронь в completed (пришёл) или not_completed
+        (не пришёл); отменённую бронь трогать нельзя.
+      parameters:
+      - description: ID брони и признак посещения
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/booking.setAttendanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/booking.Booking'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: бронь отменена
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Отметить посещаемость (админ)
       tags:
       - booking
   /booking/signUp:
@@ -515,6 +686,49 @@ paths:
       summary: Получить тренировку по ID
       tags:
       - trainings
+  /trainings/update:
+    post:
+      consumes:
+      - application/json
+      description: Только для админов
+      parameters:
+      - description: Изменённые данные тренировки
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/training.updateTrainingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/training.Training'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: нет прав администратора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - OAuth2AccessCode: []
+      summary: Изменить тренировку
+      tags:
+      - trainings
   /user/approve:
     post:
       consumes:
@@ -533,7 +747,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/user.userWithIdentities'
         "401":
           description: не авторизован
           schema:
@@ -616,7 +830,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/user.User'
+              $ref: '#/definitions/user.userWithIdentities'
             type: array
         "401":
           description: не авторизован
@@ -656,7 +870,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/user.userWithIdentities'
         "401":
           description: не авторизован
           schema:
@@ -684,6 +898,36 @@ paths:
       security:
       - BearerAuth: []
       summary: Получить пользователя по ID
+      tags:
+      - users
+  /user/identities:
+    get:
+      description: Доступно любому авторизованному пользователю, только про самого
+        себя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/user.identityInfo'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Какие платформы привязаны к моему аккаунту
       tags:
       - users
   /user/linkCode:
@@ -733,7 +977,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/user.userWithIdentities'
         "401":
           description: не авторизован
           schema:
@@ -763,6 +1007,34 @@ paths:
       summary: Выдать права администратора
       tags:
       - users
+  /user/me:
+    get:
+      description: Доступно любому авторизованному пользователю, только про самого
+        себя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.userWithIdentities'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Мой профиль
+      tags:
+      - users
   /user/removeAdmin:
     post:
       consumes:
@@ -781,7 +1053,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/user.userWithIdentities'
         "400":
           description: нельзя снять права с самого себя
           schema:
@@ -835,7 +1107,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/user.userWithIdentities'
         "401":
           description: не авторизован
           schema:
@@ -857,6 +1129,51 @@ paths:
       security:
       - BearerAuth: []
       summary: Снять одобрение с пользователя
+      tags:
+      - users
+  /user/updateProfile:
+    post:
+      consumes:
+      - application/json
+      description: userId в теле — 0 или отсутствует значит "себя". Обычный пользователь
+        может менять только себя, и только пока не одобрен администратором — после
+        одобрения имя "замораживается" и дальше его может поменять только админ (кому
+        угодно и когда угодно).
+      parameters:
+      - description: ID пользователя (необязательно), имя и фамилия
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.profileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.userWithIdentities'
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: чужой профиль или уже одобрен
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Изменить имя и фамилию
       tags:
       - users
 securityDefinitions:

@@ -22,6 +22,15 @@ type createTrainingRequest struct {
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
 }
 
+type updateTrainingRequest struct {
+	Id          int           `json:"id"`
+	Description string        `json:"description"`
+	Date        time.Time     `json:"date" format:"date-time" example:"2002-10-02T15:00:00Z"`
+	MaxQuantity int           `json:"maxQuantity"`
+	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
+	IsActive    bool          `json:"isActive"`
+}
+
 func NewTrainingHandler(trainingService *TrainingService) *TrainingHandler {
 	return &TrainingHandler{TrainingService: trainingService}
 }
@@ -57,6 +66,39 @@ func (h *TrainingHandler) CreateTraining(w http.ResponseWriter, r *http.Request)
 	}
 
 	http2.RespondJSON(w, http.StatusOK, saved)
+}
+
+// UpdateTraining godoc
+// @Summary      Изменить тренировку
+// @Description  Только для админов
+// @Tags         trainings
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Security     OAuth2AccessCode
+// @Param        request  body      updateTrainingRequest  true  "Изменённые данные тренировки"
+// @Success      200      {object}  Training
+// @Failure      401      {object}  map[string]string  "не авторизован"
+// @Failure      403      {object}  map[string]string  "нет прав администратора"
+// @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /trainings/update [post]
+func (h *TrainingHandler) UpdateTraining(w http.ResponseWriter, r *http.Request) {
+	var req updateTrainingRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "updateTrainingRequest"})
+		return
+	}
+
+	updated, err := h.TrainingService.UpdateTraining(r.Context(), req.Id, req.Description, req.Date, req.MaxQuantity, req.Duration, req.IsActive)
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	http2.RespondJSON(w, http.StatusOK, updated)
 }
 
 // GetAllTrainings godoc
