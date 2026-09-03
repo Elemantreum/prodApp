@@ -192,7 +192,7 @@ func (p *PostgresUserRepository) GetAll(ctx context.Context) ([]User, error) {
 
 func (p *PostgresUserRepository) FindAdmins(ctx context.Context) ([]User, error) {
 	rows, err := p.pool.Query(ctx,
-		`SELECT id, first_name, last_name, is_approved, is_admin 
+		`SELECT id, username, first_name, last_name, is_approved, is_admin, created_at, updated_at
 			FROM users
 			WHERE is_admin = true
 			`)

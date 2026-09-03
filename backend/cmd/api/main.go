@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"prodApp/internal/booking"
 	"prodApp/internal/config"
-	"prodApp/internal/notifier"
 	"prodApp/internal/platform/auth"
 	"prodApp/internal/platform/db"
 	"prodApp/internal/training"
@@ -78,18 +77,6 @@ func main() {
 	psqlBookingRepo := booking.NewPostgresBookingRepository(pool)
 	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo)
 	bookingHandler := booking.NewBookingHandler(bookingService)
-
-	notificator := notifier.NewTelegramNotifier(cfg.TelegramBotToken, userService, bookingService)
-
-	if err := notificator.NotifyUser(ctx, 702957283, "whrhurhuvuhvd"); err != nil {
-		log.Printf("send Telegram message: %v", err)
-	}
-	if err := notificator.NotifyAdmins(ctx, "e12e"); err != nil {
-		log.Printf("send Telegram message: %v", err)
-	}
-	if err := notificator.NotifyTraining(ctx, 1, "bebf"); err != nil {
-		log.Printf("send Telegram message: %v", err)
-	}
 
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
