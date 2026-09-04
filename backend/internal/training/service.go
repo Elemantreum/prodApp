@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"prodApp/internal/platform/apperrors"
+	"prodApp/internal/platform/events"
 	http2 "prodApp/internal/platform/http"
 	"time"
 )
@@ -32,13 +33,14 @@ type RecurringTrainingRepository interface {
 
 type TrainingService struct {
 	repo TrainingRepository
+	bus  *events.Bus
 }
 
-func NewTrainingService(repo TrainingRepository) *TrainingService {
-	return &TrainingService{repo: repo}
+func NewTrainingService(repo TrainingRepository, bus *events.Bus) *TrainingService {
+	return &TrainingService{repo: repo, bus: bus}
 }
 
-func (service *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
+func (s *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
 	if description == "" {
 		return nil, fmt.Errorf("description is required")
 	}
@@ -55,16 +57,20 @@ func (service *TrainingService) AddTraining(ctx context.Context, description str
 		return nil, fmt.Errorf("duration can't be less or equal than 0")
 	}
 
-	saved, err := service.repo.Create(ctx, description, date, maxQuantity, duration)
+	saved, err := s.repo.Create(ctx, description, date, maxQuantity, duration)
 
 	if err != nil {
-		return nil, fmt.Errorf("saving user: %w", err)
+		return nil, fmt.Errorf("saving training: %w", err)
 	}
+
+	events.Publish(ctx, s.bus, OnCreateTraining{
+		saved.Id, saved.Description, saved.Date, saved.MaxQuantity, saved.Duration,
+	})
 
 	return saved, nil
 }
 
-func (service *TrainingService) UpdateTraining(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool) (*Training, error) {
+func (s *TrainingService) UpdateTraining(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool) (*Training, error) {
 	if description == "" {
 		return nil, fmt.Errorf("description is required")
 	}
@@ -81,13 +87,13 @@ func (service *TrainingService) UpdateTraining(ctx context.Context, id int, desc
 		return nil, fmt.Errorf("duration can't be less or equal than 0")
 	}
 
-	err := service.repo.Update(ctx, id, description, date, maxQuantity, duration, isActive)
+	err := s.repo.Update(ctx, id, description, date, maxQuantity, duration, isActive)
 
 	if err != nil {
 		return nil, fmt.Errorf("updating training: %w", err)
 	}
 
-	updated, err := service.repo.FindById(ctx, id)
+	updated, err := s.repo.FindById(ctx, id)
 
 	if err != nil {
 		return nil, fmt.Errorf("finding updated training: %w", err)
@@ -96,8 +102,8 @@ func (service *TrainingService) UpdateTraining(ctx context.Context, id int, desc
 	return updated, nil
 }
 
-func (service *TrainingService) FindById(ctx context.Context, id int) (*Training, error) {
-	training, err := service.repo.FindById(ctx, id)
+func (s *TrainingService) FindById(ctx context.Context, id int) (*Training, error) {
+	training, err := s.repo.FindById(ctx, id)
 
 	if err != nil {
 		return nil, fmt.Errorf("finding user: %w", err)
@@ -110,8 +116,8 @@ func (service *TrainingService) FindById(ctx context.Context, id int) (*Training
 // остальным. requester может быть nil (на всякий случай, если middleware
 // почему-то не положил claims в контекст) — тогда, как и для любого
 // обычного пользователя, неактивные тренировки не отдаются.
-func (service *TrainingService) GetAll(ctx context.Context, requester *http2.Claims) ([]Training, error) {
-	trainings, err := service.repo.GetAll(ctx)
+func (s *TrainingService) GetAll(ctx context.Context, requester *http2.Claims) ([]Training, error) {
+	trainings, err := s.repo.GetAll(ctx)
 
 	if err != nil {
 		return nil, fmt.Errorf("getting trainings: %w", err)
@@ -138,8 +144,8 @@ func (service *TrainingService) GetAll(ctx context.Context, requester *http2.Cla
 // способ "убрать" тренировку с сохранением истории; Delete — только для
 // пустых, ничего не значащих записей (опечатка, лишнее регулярное занятие
 // и т.п.).
-func (service *TrainingService) DeleteTraining(ctx context.Context, id int) error {
-	hasBookings, err := service.repo.HasBookings(ctx, id)
+func (s *TrainingService) DeleteTraining(ctx context.Context, id int) error {
+	hasBookings, err := s.repo.HasBookings(ctx, id)
 
 	if err != nil {
 		return fmt.Errorf("checking bookings: %w", err)
@@ -152,7 +158,7 @@ func (service *TrainingService) DeleteTraining(ctx context.Context, id int) erro
 		}
 	}
 
-	if err := service.repo.Delete(ctx, id); err != nil {
+	if err := s.repo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("deleting training: %w", err)
 	}
 
@@ -165,8 +171,8 @@ func (service *TrainingService) DeleteTraining(ctx context.Context, id int) erro
 // вмешательства админа. Booking.CreateBooking всё равно дополнительно
 // проверяет дату напрямую — на случай гонки в окне между тем, как
 // тренировка прошла, и следующим тиком этого метода.
-func (service *TrainingService) DeactivatePastTrainings(ctx context.Context) error {
-	if err := service.repo.DeactivatePast(ctx); err != nil {
+func (s *TrainingService) DeactivatePastTrainings(ctx context.Context) error {
+	if err := s.repo.DeactivatePast(ctx); err != nil {
 		return fmt.Errorf("deactivating past trainings: %w", err)
 	}
 

@@ -5,6 +5,7 @@ import type { BookingDetail, BookingStatus, Training } from "../api/types";
 import { isoToLocalDateTimeInput, localDateTimeInputToIso } from "../utils/date";
 import { minutesToNs, nsToMinutes } from "../utils/duration";
 import { Button } from "./Button";
+import { ContactLinks } from "./ContactLinks";
 import { ErrorBanner } from "./ErrorBanner";
 import { Spinner } from "./Spinner";
 
@@ -184,7 +185,10 @@ export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: 
                 return (
                   <li key={b.bookingId} className="attendance-row">
                     <div className="attendance-row__info">
-                      <div className="participants__name">{fullName || "Без имени"}</div>
+                      <div className="participants__name">
+                        {fullName || "Без имени"}
+                        <ContactLinks identities={b.identities} />
+                      </div>
                       <span className={`badge badge--${b.status}`}>{STATUS_LABEL[b.status]}</span>
                     </div>
                     {b.status !== "cancelled" && (

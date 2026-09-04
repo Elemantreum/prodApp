@@ -125,7 +125,7 @@ func (h *AuthHandler) linkAndRespond(w http.ResponseWriter, r *http.Request, pri
 		return
 	}
 
-	appUser, err := h.userService.ResolveAndLink(r.Context(), code, principal.Provider, principal.ExternalId)
+	appUser, err := h.userService.ResolveAndLink(r.Context(), code, principal.Provider, principal.ExternalId, principal.Username)
 	if err != nil {
 		http2.RespondError(w, err)
 		return
@@ -145,7 +145,7 @@ type tokenResponse struct {
 }
 
 func (h *AuthHandler) issueAndRespond(w http.ResponseWriter, r *http.Request, principal *Principal) {
-	appUser, err := h.userService.EnsureProfile(r.Context(), principal.Provider, principal.ExternalId, principal.FirstName, principal.LastName)
+	appUser, err := h.userService.EnsureProfile(r.Context(), principal.Provider, principal.ExternalId, principal.FirstName, principal.LastName, principal.Username)
 	if err != nil {
 		http2.RespondError(w, err)
 		return

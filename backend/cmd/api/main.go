@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"prodApp/internal/booking"
 	"prodApp/internal/config"
+	"prodApp/internal/notifier"
 	"prodApp/internal/platform/auth"
 	"prodApp/internal/platform/db"
+	"prodApp/internal/platform/events"
 	"prodApp/internal/training"
 	"prodApp/internal/user"
 	"syscall"
@@ -36,11 +39,6 @@ import (
 // @name                        Authorization
 // @description                 Введите токен в формате: Bearer {token}
 
-// @securityDefinitions.oauth2.accessCode  OAuth2AccessCode
-// @tokenUrl                               http://localhost:8081/realms/prodApp/protocol/openid-connect/token
-// @authorizationUrl                       http://localhost:8081/realms/prodApp/protocol/openid-connect/auth
-// @scope.openid                           openid scope
-
 func main() {
 	log.Printf("start main")
 
@@ -64,26 +62,33 @@ func main() {
 	}
 	defer pool.Close()
 
-	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
-	trainingService := training.NewTrainingService(psqlTrainingRepo)
-
-	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
-	recurringService := training.NewRecurringService(psqlRecurringRepo, psqlTrainingRepo)
-
-	trainingHandler := training.NewTrainingHandler(trainingService, recurringService)
+	bus := events.NewBus()
 
 	psqlUserRepo := user.NewPostgresUserRepository(pool)
 	psqlIdentityRepo := user.NewPostgresIdentityRepository(pool)
 	psqlLinkCodeRepo := user.NewPostgresLinkCodeRepository(pool)
 
+	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo)
+	userHandler := user.NewUserHandler(userService)
+
+	var notifiers []notifier.Notifier
+
+	tgNotifier := notifier.NewTelegramNotifier(cfg.TelegramBotToken, userService)
+	//vkNotifier := notifier.NewVkNotifier(cfg.VKAppSecretKey, userService)
+
+	notifiers = append(notifiers, tgNotifier)
+
+	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
+	trainingService := training.NewTrainingService(psqlTrainingRepo, bus)
+
 	psqlBookingRepo := booking.NewPostgresBookingRepository(pool)
-	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo)
+	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo, psqlIdentityRepo)
 	bookingHandler := booking.NewBookingHandler(bookingService)
 
-	// bookingService реализует user.BookingChecker — используется, чтобы не
-	// удалять осиротевший после привязки аккаунт, если на нём есть брони.
-	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo, bookingService)
-	userHandler := user.NewUserHandler(userService)
+	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
+	recurringService := training.NewRecurringService(psqlRecurringRepo, psqlTrainingRepo)
+
+	trainingHandler := training.NewTrainingHandler(trainingService, recurringService)
 
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
@@ -91,6 +96,33 @@ func main() {
 	authMiddleware := auth.AuthMiddleware(tokenIssuer)
 
 	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, userService)
+
+	events.Subscribe(bus, func(ctx context.Context, createTraining training.OnCreateTraining) {
+
+		go func() {
+			ctx = context.Background()
+
+			users, err := userService.ListUsers(ctx)
+
+			if err != nil {
+				log.Println(err)
+			}
+
+			var userIds = make([]int, 0, len(users))
+
+			for _, user := range users {
+				userIds = append(userIds, user.Id)
+			}
+
+			for _, notifier := range notifiers {
+				err := notifier.NotifyMany(ctx, userIds, fmt.Sprintf("Новая тренировка! На этот раз вас будут ебать на %s в %s", createTraining.Description, createTraining.Date.Format("15:04 15.04")))
+
+				if err != nil {
+					log.Println(err)
+				}
+			}
+		}()
+	})
 
 	router := chi.NewRouter()
 

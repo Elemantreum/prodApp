@@ -54,6 +54,8 @@ export interface Participant {
   lastName: string;
   username: string;
   bookingDate: string;
+  /** Привязанные платформы — источник для ссылок на VK/Telegram контакты. */
+  identities: Identity[];
 }
 
 /** Админский взгляд на одну запись на тренировку — в отличие от Participant
@@ -67,6 +69,7 @@ export interface BookingDetail {
   username: string;
   status: BookingStatus;
   bookingDate: string;
+  identities: Identity[];
 }
 
 export interface CreateTrainingInput {
@@ -91,6 +94,10 @@ export interface LinkCode {
 export interface Identity {
   provider: string;
   externalId: string;
+  /** @-хендл на этой платформе, если есть — сейчас реально заполняется
+   *  только для Telegram (VK его не даёт, для VK ссылка строится по
+   *  externalId напрямую). Пустая строка, если не задан/не применимо. */
+  username: string;
 }
 
 export interface User {

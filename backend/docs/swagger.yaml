@@ -33,6 +33,10 @@ definitions:
         type: integer
       firstName:
         type: string
+      identities:
+        items:
+          $ref: '#/definitions/user.Identity'
+        type: array
       lastName:
         type: string
       status:
@@ -44,22 +48,23 @@ definitions:
     type: object
   booking.BookingStatus:
     enum:
-    - 0
-    - 1
-    - 2
-    - 3
-    type: integer
+    - active
+    type: string
     x-enum-varnames:
     - Active
-    - Cancelled
-    - Completed
-    - NotCompleted
   booking.Participant:
     properties:
       bookingDate:
         type: string
       firstName:
         type: string
+      identities:
+        description: |-
+          Identities — привязанные платформы участника (провайдер, внешний id,
+          @-хендл если есть) — фронт строит из них ссылки на vk.com/id.../t.me/... .
+        items:
+          $ref: '#/definitions/user.Identity'
+        type: array
       lastName:
         type: string
       userId:
@@ -216,6 +221,28 @@ definitions:
         type: boolean
       maxQuantity:
         type: integer
+    type: object
+  user.Identity:
+    properties:
+      createdAt:
+        type: string
+      externalId:
+        type: string
+      id:
+        type: integer
+      provider:
+        type: string
+      userId:
+        type: integer
+      username:
+        description: |-
+          Username — @-хендл на этой платформе, если есть. Сейчас реально
+          заполняется только для Telegram (VK не отдаёт его в launch-параметрах;
+          для VK ссылка на профиль строится напрямую по ExternalId, username не
+          нужен). Обновляется при каждом логине (см. UserService.EnsureProfile) —
+          в отличие от имени/фамилии, это чисто техническая деталь для ссылок,
+          а не то, что юзер осознанно редактирует.
+        type: string
     type: object
   user.identityInfo:
     properties:
@@ -1424,11 +1451,4 @@ securityDefinitions:
     in: header
     name: Authorization
     type: apiKey
-  OAuth2AccessCode:
-    authorizationUrl: http://localhost:8081/realms/prodApp/protocol/openid-connect/auth
-    flow: accessCode
-    scopes:
-      openid: openid scope
-    tokenUrl: http://localhost:8081/realms/prodApp/protocol/openid-connect/token
-    type: oauth2
 swagger: "2.0"

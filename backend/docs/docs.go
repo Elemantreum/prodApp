@@ -1830,6 +1830,12 @@ const docTemplate = `{
                 "firstName": {
                     "type": "string"
                 },
+                "identities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Identity"
+                    }
+                },
                 "lastName": {
                     "type": "string"
                 },
@@ -1845,18 +1851,12 @@ const docTemplate = `{
             }
         },
         "booking.BookingStatus": {
-            "type": "integer",
+            "type": "string",
             "enum": [
-                0,
-                1,
-                2,
-                3
+                "active"
             ],
             "x-enum-varnames": [
-                "Active",
-                "Cancelled",
-                "Completed",
-                "NotCompleted"
+                "Active"
             ]
         },
         "booking.Participant": {
@@ -1867,6 +1867,13 @@ const docTemplate = `{
                 },
                 "firstName": {
                     "type": "string"
+                },
+                "identities": {
+                    "description": "Identities — привязанные платформы участника (провайдер, внешний id,\n@-хендл если есть) — фронт строит из них ссылки на vk.com/id.../t.me/... .",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.Identity"
+                    }
                 },
                 "lastName": {
                     "type": "string"
@@ -2080,6 +2087,30 @@ const docTemplate = `{
                 }
             }
         },
+        "user.Identity": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "externalId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "description": "Username — @-хендл на этой платформе, если есть. Сейчас реально\nзаполняется только для Telegram (VK не отдаёт его в launch-параметрах;\nдля VK ссылка на профиль строится напрямую по ExternalId, username не\nнужен). Обновляется при каждом логине (см. UserService.EnsureProfile) —\nв отличие от имени/фамилии, это чисто техническая деталь для ссылок,\nа не то, что юзер осознанно редактирует.",
+                    "type": "string"
+                }
+            }
+        },
         "user.identityInfo": {
             "type": "object",
             "properties": {
@@ -2170,15 +2201,6 @@ const docTemplate = `{
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
-        },
-        "OAuth2AccessCode": {
-            "type": "oauth2",
-            "flow": "accessCode",
-            "authorizationUrl": "http://localhost:8081/realms/prodApp/protocol/openid-connect/auth",
-            "tokenUrl": "http://localhost:8081/realms/prodApp/protocol/openid-connect/token",
-            "scopes": {
-                "openid": "openid scope"
-            }
         }
     }
 }`

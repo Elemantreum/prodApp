@@ -20,11 +20,18 @@ type User struct {
 }
 
 type Identity struct {
-	Id         int
-	UserId     int
-	Provider   string
-	ExternalId string
-	CreatedAt  time.Time
+	Id         int    `json:"id"`
+	UserId     int    `json:"userId"`
+	Provider   string `json:"provider"`
+	ExternalId string `json:"externalId"`
+	// Username — @-хендл на этой платформе, если есть. Сейчас реально
+	// заполняется только для Telegram (VK не отдаёт его в launch-параметрах;
+	// для VK ссылка на профиль строится напрямую по ExternalId, username не
+	// нужен). Обновляется при каждом логине (см. UserService.EnsureProfile) —
+	// в отличие от имени/фамилии, это чисто техническая деталь для ссылок,
+	// а не то, что юзер осознанно редактирует.
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // LinkCode — одноразовый короткоживущий код: генерируется в уже открытой

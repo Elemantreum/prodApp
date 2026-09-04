@@ -43,3 +43,11 @@ type RecurringTraining struct {
 	IsActive  bool          `json:"isActive"`
 	CreatedAt time.Time     `json:"createdAt" format:"date-time" example:"2002-10-02T15:00:00Z"`
 }
+
+type OnCreateTraining struct {
+	TrainingId  int
+	Description string
+	Date        time.Time
+	MaxQuantity int
+	Duration    time.Duration
+}

@@ -26,8 +26,9 @@ type IdentityRepository interface {
 	//FindById(ctx context.Context, id int) (*Identity, error)
 	FindByProviderAndExternalID(ctx context.Context, provider, externalID string) (*Identity, error)
 	FindByUserID(ctx context.Context, userID int) ([]Identity, error)
-	Reassign(ctx context.Context, provider, externalID string, newUserID int) error
+	Reassign(ctx context.Context, provider, externalID, username string, newUserID int) error
 	GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error)
+	UpdateUsername(ctx context.Context, provider, externalID, username string) error
 }
 
 type LinkCodeRepository interface {
@@ -35,24 +36,14 @@ type LinkCodeRepository interface {
 	FindAndDelete(ctx context.Context, code string) (*LinkCode, error)
 }
 
-// BookingChecker — узкий срез booking.BookingService, нужный только для
-// решения "можно ли тихо удалить осиротевший после привязки аккаунт". Не
-// импортируем сам пакет booking напрямую — он уже импортирует user (ради
-// UserRepository), так что было бы cycle; main.go подсовывает сюда
-// *booking.BookingService, который эту сигнатуру уже удовлетворяет.
-type BookingChecker interface {
-	HasBookings(ctx context.Context, userID int) (bool, error)
-}
-
 type UserService struct {
-	userRepo       UserRepository
-	identityRepo   IdentityRepository
-	linkCodeRepo   LinkCodeRepository
-	bookingChecker BookingChecker
+	userRepo     UserRepository
+	identityRepo IdentityRepository
+	linkCodeRepo LinkCodeRepository
 }
 
-func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository, bookingChecker BookingChecker) *UserService {
-	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo, bookingChecker: bookingChecker}
+func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository) *UserService {
+	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo}
 }
 
 const (
@@ -95,7 +86,7 @@ func (s *UserService) GenerateLinkCode(ctx context.Context, userID int) (*LinkCo
 // через одновременное подтверждение владения обеими сторонами (валидная
 // подпись initData/launch params + код, который знает только владелец
 // исходного аккаунта), так что переставлять безопасно.
-func (s *UserService) ResolveAndLink(ctx context.Context, code, provider, externalID string) (*User, error) {
+func (s *UserService) ResolveAndLink(ctx context.Context, code, provider, externalID, username string) (*User, error) {
 	lc, err := s.linkCodeRepo.FindAndDelete(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("invalid link code: %w", err)
@@ -113,7 +104,7 @@ func (s *UserService) ResolveAndLink(ctx context.Context, code, provider, extern
 		previousOwnerID = existing.UserId
 	}
 
-	if err := s.identityRepo.Reassign(ctx, provider, externalID, lc.UserId); err != nil {
+	if err := s.identityRepo.Reassign(ctx, provider, externalID, username, lc.UserId); err != nil {
 		return nil, fmt.Errorf("reassign identity: %w", err)
 	}
 
@@ -130,6 +121,8 @@ func (s *UserService) GetBatchTgById(ctx context.Context, id []int, provider str
 		return nil, fmt.Errorf("get identity by id: %w", err)
 	}
 	return identity, err
+}
+
 // cleanupOrphan подчищает аккаунт, оставшийся без единой привязки после
 // ResolveAndLink. Удаляет ТОЛЬКО если на нём нет ни одной брони — Delete
 // каскадно снёс бы их вместе с аккаунтом, а это уже настоящая потеря
@@ -143,11 +136,6 @@ func (s *UserService) cleanupOrphan(ctx context.Context, userID int) {
 		return
 	}
 
-	hasBookings, err := s.bookingChecker.HasBookings(ctx, userID)
-	if err != nil || hasBookings {
-		return
-	}
-
 	orphan, err := s.userRepo.FindById(ctx, userID)
 	if err != nil {
 		return
@@ -158,9 +146,15 @@ func (s *UserService) cleanupOrphan(ctx context.Context, userID int) {
 
 // EnsureProfile находит пользователя, привязанного к данной платформенной identity,
 // либо создаёт нового пользователя вместе с первой identity, если такой ещё нет.
-func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, firstName, lastName string) (*User, error) {
+// username — @-хендл на этой платформе (для VK всегда пустой, платформа его
+// не даёт) — обновляется на каждый логин, чтобы ссылка на контакт (см.
+// booking.Participant) не протухала, если человек сменит username в Telegram.
+func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, firstName, lastName, username string) (*User, error) {
 	identity, err := s.identityRepo.FindByProviderAndExternalID(ctx, provider, externalID)
 	if err == nil {
+		if updateErr := s.identityRepo.UpdateUsername(ctx, provider, externalID, username); updateErr != nil {
+			return nil, fmt.Errorf("update identity username: %w", updateErr)
+		}
 		return s.userRepo.FindById(ctx, identity.UserId)
 	}
 	if !errors.Is(err, apperrors.NotFoundError{}) {
@@ -188,6 +182,7 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 		UserId:     createdUser.Id,
 		Provider:   provider,
 		ExternalId: externalID,
+		Username:   username,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create identity: %w", err)

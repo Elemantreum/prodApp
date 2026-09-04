@@ -21,38 +21,15 @@ type BookingRepository interface {
 	GetAll(ctx context.Context) ([]Booking, error)
 }
 
-// Participant — то, что видит обычный пользователь про других записавшихся:
-// имя, ник и когда записался. Никакого approve/admin статуса — это не его
-// дело, в отличие от админской ручки /user/get.
-type Participant struct {
-	UserId      int       `json:"userId"`
-	FirstName   string    `json:"firstName"`
-	LastName    string    `json:"lastName"`
-	Username    string    `json:"username"`
-	BookingDate time.Time `json:"bookingDate"`
-}
-
-// BookingDetail — админский взгляд на одну запись на тренировку: в отличие
-// от Participant включает статус и id самой брони (нужен, чтобы вызвать
-// SetAttendance), и не фильтрует по статусу — сюда попадают и отменённые.
-type BookingDetail struct {
-	BookingId   int           `json:"bookingId"`
-	UserId      int           `json:"userId"`
-	FirstName   string        `json:"firstName"`
-	LastName    string        `json:"lastName"`
-	Username    string        `json:"username"`
-	Status      BookingStatus `json:"status"`
-	BookingDate time.Time     `json:"bookingDate"`
-}
-
 type BookingService struct {
 	bookRepo     BookingRepository
 	trainingRepo training.TrainingRepository
 	userRepo     user.UserRepository
+	identityRepo user.IdentityRepository
 }
 
-func NewBookingService(bookRepo BookingRepository, trainingRepo training.TrainingRepository, userRepo user.UserRepository) *BookingService {
-	return &BookingService{bookRepo: bookRepo, trainingRepo: trainingRepo, userRepo: userRepo}
+func NewBookingService(bookRepo BookingRepository, trainingRepo training.TrainingRepository, userRepo user.UserRepository, identityRepo user.IdentityRepository) *BookingService {
+	return &BookingService{bookRepo: bookRepo, trainingRepo: trainingRepo, userRepo: userRepo, identityRepo: identityRepo}
 }
 
 func (service *BookingService) CreateBooking(ctx context.Context, userId int, trainingId int) (*Booking, error) {
@@ -129,12 +106,19 @@ func (service *BookingService) GetParticipants(ctx context.Context, trainingId i
 			return nil, fmt.Errorf("error getting user %d: %w", b.UserId, err)
 		}
 
+		identities, err := service.identityRepo.FindByUserID(ctx, b.UserId)
+
+		if err != nil {
+			return nil, fmt.Errorf("error getting identities for user %d: %w", b.UserId, err)
+		}
+
 		participants = append(participants, Participant{
 			UserId:      b.UserId,
 			FirstName:   u.FirstName,
 			LastName:    u.LastName,
 			Username:    u.Username,
 			BookingDate: b.BookingDate,
+			Identities:  identities,
 		})
 	}
 
@@ -167,6 +151,12 @@ func (service *BookingService) GetTrainingBookings(ctx context.Context, training
 			return nil, fmt.Errorf("error getting user %d: %w", b.UserId, err)
 		}
 
+		identities, err := service.identityRepo.FindByUserID(ctx, b.UserId)
+
+		if err != nil {
+			return nil, fmt.Errorf("error getting identities for user %d: %w", b.UserId, err)
+		}
+
 		details = append(details, BookingDetail{
 			BookingId:   b.Id,
 			UserId:      b.UserId,
@@ -175,6 +165,7 @@ func (service *BookingService) GetTrainingBookings(ctx context.Context, training
 			Username:    u.Username,
 			Status:      b.Status,
 			BookingDate: b.BookingDate,
+			Identities:  identities,
 		})
 	}
 

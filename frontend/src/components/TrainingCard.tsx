@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { formatDateTime } from "../utils/date";
 import { formatDurationNs } from "../utils/duration";
 import { Button } from "./Button";
+import { ContactLinks } from "./ContactLinks";
 import { OccupancyBar } from "./OccupancyBar";
 import { Spinner } from "./Spinner";
 import { TrainingAdminModal } from "./TrainingAdminModal";
@@ -138,7 +139,10 @@ export function TrainingCard({
                 const fullName = [p.firstName, p.lastName].filter(Boolean).join(" ");
                 return (
                   <li key={p.userId}>
-                    <div className="participants__name">{fullName || "Без имени"}</div>
+                    <div className="participants__name">
+                      {fullName || "Без имени"}
+                      <ContactLinks identities={p.identities} />
+                    </div>
                   </li>
                 );
               })}

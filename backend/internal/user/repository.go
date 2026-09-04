@@ -20,7 +20,7 @@ func NewPostgresIdentityRepository(pool *pgxpool.Pool) *PostgresIdentityReposito
 
 func (r *PostgresIdentityRepository) GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, user_id, provider, external_id
+		`SELECT id, user_id, provider, external_id, username
 		 FROM user_identities
 		 WHERE provider = $1`, provider)
 	if err != nil {
@@ -31,7 +31,7 @@ func (r *PostgresIdentityRepository) GetBatchById(ctx context.Context, ids []int
 	identities := make([]Identity, 0)
 	for rows.Next() {
 		var identity Identity
-		if err := rows.Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId); err != nil {
+		if err := rows.Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId, &identity.Username); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		identities = append(identities, identity)
@@ -46,11 +46,11 @@ func (r *PostgresIdentityRepository) GetBatchById(ctx context.Context, ids []int
 func (r *PostgresIdentityRepository) FindByProviderAndExternalID(ctx context.Context, provider, externalID string) (*Identity, error) {
 	var identity Identity
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, user_id, provider, external_id
+		`SELECT id, user_id, provider, external_id, username
 		 FROM user_identities
 		 WHERE provider = $1 AND external_id = $2`,
 		provider, externalID,
-	).Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId)
+	).Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId, &identity.Username)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("identity %s/%s: %w", provider, externalID, apperrors.NotFoundError{})
@@ -63,14 +63,14 @@ func (r *PostgresIdentityRepository) FindByProviderAndExternalID(ctx context.Con
 
 func (r *PostgresIdentityRepository) Create(ctx context.Context, identity *Identity) (*Identity, error) {
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO user_identities (user_id, provider, external_id)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, user_id, provider, external_id`,
-		identity.UserId, identity.Provider, identity.ExternalId,
+		`INSERT INTO user_identities (user_id, provider, external_id, username)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, user_id, provider, external_id, username`,
+		identity.UserId, identity.Provider, identity.ExternalId, identity.Username,
 	)
 
 	var saved Identity
-	err := row.Scan(&saved.Id, &saved.UserId, &saved.Provider, &saved.ExternalId)
+	err := row.Scan(&saved.Id, &saved.UserId, &saved.Provider, &saved.ExternalId, &saved.Username)
 	if err != nil {
 		return nil, fmt.Errorf("create identity: %w", err)
 	}
@@ -79,7 +79,7 @@ func (r *PostgresIdentityRepository) Create(ctx context.Context, identity *Ident
 
 func (r *PostgresIdentityRepository) FindByUserID(ctx context.Context, userID int) ([]Identity, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, user_id, provider, external_id FROM user_identities WHERE user_id = $1 ORDER BY id`, userID)
+		`SELECT id, user_id, provider, external_id, username FROM user_identities WHERE user_id = $1 ORDER BY id`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("find identities: %w", err)
 	}
@@ -88,7 +88,7 @@ func (r *PostgresIdentityRepository) FindByUserID(ctx context.Context, userID in
 	identities := make([]Identity, 0)
 	for rows.Next() {
 		var identity Identity
-		if err := rows.Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId); err != nil {
+		if err := rows.Scan(&identity.Id, &identity.UserId, &identity.Provider, &identity.ExternalId, &identity.Username); err != nil {
 			return nil, fmt.Errorf("scan identity: %w", err)
 		}
 		identities = append(identities, identity)
@@ -107,15 +107,29 @@ func (r *PostgresIdentityRepository) FindByUserID(ctx context.Context, userID in
 // привязки — там владение обеими платформенными аккаунтами уже подтверждено
 // (валидная подпись initData/launch params + код, который знает только
 // владелец исходного аккаунта).
-func (r *PostgresIdentityRepository) Reassign(ctx context.Context, provider, externalID string, newUserID int) error {
+func (r *PostgresIdentityRepository) Reassign(ctx context.Context, provider, externalID, username string, newUserID int) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO user_identities (user_id, provider, external_id)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (provider, external_id) DO UPDATE SET user_id = EXCLUDED.user_id`,
-		newUserID, provider, externalID,
+		`INSERT INTO user_identities (user_id, provider, external_id, username)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (provider, external_id) DO UPDATE SET user_id = EXCLUDED.user_id, username = EXCLUDED.username`,
+		newUserID, provider, externalID, username,
 	)
 	if err != nil {
 		return fmt.Errorf("reassign identity: %w", err)
+	}
+	return nil
+}
+
+// UpdateUsername обновляет @-хендл при повторном логине — в отличие от
+// имени/фамилии это не то, чем управляет юзер, а просто техническая деталь
+// для ссылок, поэтому обновляем молча на каждый вход без всякого UI.
+func (r *PostgresIdentityRepository) UpdateUsername(ctx context.Context, provider, externalID, username string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE user_identities SET username = $3 WHERE provider = $1 AND external_id = $2`,
+		provider, externalID, username,
+	)
+	if err != nil {
+		return fmt.Errorf("update identity username: %w", err)
 	}
 	return nil
 }
