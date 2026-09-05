@@ -2,6 +2,9 @@ package notifier
 
 import "context"
 
+// VkNotifier — перенесённая заглушка, как была в backend/internal/notifier.
+// Не реализована и нигде не подключена (см. cmd/notifier/main.go) — так же,
+// как и в монолите до переноса.
 type VkNotifier struct {
 }
 
@@ -20,6 +23,6 @@ func (v VkNotifier) NotifyAdmins(ctx context.Context, msg string) error {
 	panic("implement me")
 }
 
-func NewVkNotifier(appSecretKey string, notifier *TelegramNotifier) *VkNotifier {
+func NewVkNotifier(appSecretKey string) *VkNotifier {
 	return &VkNotifier{}
 }

@@ -44,10 +44,25 @@ type RecurringTraining struct {
 	CreatedAt time.Time     `json:"createdAt" format:"date-time" example:"2002-10-02T15:00:00Z"`
 }
 
+// OnCreateTraining/OnUpdateTraining — доменные события, публикуются в общую
+// in-process шину (см. platform/events); main.go пересылает их как есть в
+// Kafka (см. platform/kafka), чтобы внешние сервисы (notifier-service и
+// потенциально другие — например, будущий сервис логирования) сами решали,
+// что с ними делать. Здесь только факт "что произошло", без решения "кого
+// уведомлять и как" — это уже дело подписчика.
 type OnCreateTraining struct {
 	TrainingId  int
 	Description string
 	Date        time.Time
 	MaxQuantity int
 	Duration    time.Duration
+}
+
+type OnUpdateTraining struct {
+	TrainingId  int
+	Description string
+	Date        time.Time
+	MaxQuantity int
+	Duration    time.Duration
+	IsActive    bool
 }

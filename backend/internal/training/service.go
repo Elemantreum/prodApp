@@ -6,6 +6,8 @@ import (
 	"prodApp/internal/platform/apperrors"
 	"prodApp/internal/platform/events"
 	http2 "prodApp/internal/platform/http"
+	"prodApp/internal/platform/kafka"
+	"reflect"
 	"time"
 )
 
@@ -32,12 +34,12 @@ type RecurringTrainingRepository interface {
 }
 
 type TrainingService struct {
-	repo TrainingRepository
-	bus  *events.Bus
+	repo          TrainingRepository
+	kafkaProducer *kafka.Producer
 }
 
-func NewTrainingService(repo TrainingRepository, bus *events.Bus) *TrainingService {
-	return &TrainingService{repo: repo, bus: bus}
+func NewTrainingService(repo TrainingRepository, kafkaProducer *kafka.Producer) *TrainingService {
+	return &TrainingService{repo: repo, kafkaProducer: kafkaProducer}
 }
 
 func (s *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
@@ -63,9 +65,19 @@ func (s *TrainingService) AddTraining(ctx context.Context, description string, d
 		return nil, fmt.Errorf("saving training: %w", err)
 	}
 
-	events.Publish(ctx, s.bus, OnCreateTraining{
-		saved.Id, saved.Description, saved.Date, saved.MaxQuantity, saved.Duration,
-	})
+	event := OnCreateTraining{
+		TrainingId:  saved.Id,
+		Description: description,
+		Date:        date,
+		MaxQuantity: maxQuantity,
+		Duration:    duration,
+	}
+
+	err = kafka.Publish(ctx, s.kafkaProducer, reflect.TypeOf(event).Name(), event)
+
+	if err != nil {
+		return saved, fmt.Errorf("publishing training: %w", err)
+	}
 
 	return saved, nil
 }
@@ -98,6 +110,15 @@ func (s *TrainingService) UpdateTraining(ctx context.Context, id int, descriptio
 	if err != nil {
 		return nil, fmt.Errorf("finding updated training: %w", err)
 	}
+
+	events.Publish(ctx, s.bus, OnUpdateTraining{
+		TrainingId:  updated.Id,
+		Description: updated.Description,
+		Date:        updated.Date,
+		MaxQuantity: updated.MaxQuantity,
+		Duration:    updated.Duration,
+		IsActive:    updated.IsActive,
+	})
 
 	return updated, nil
 }

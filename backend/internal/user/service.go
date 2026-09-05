@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"prodApp/internal/platform/apperrors"
+	"prodApp/internal/platform/events"
 	http2 "prodApp/internal/platform/http"
 	"time"
 )
@@ -36,14 +37,27 @@ type LinkCodeRepository interface {
 	FindAndDelete(ctx context.Context, code string) (*LinkCode, error)
 }
 
+// OnNewUser публикуется в EnsureProfile при создании НОВОГО пользователя
+// (не при обычном повторном логине) — main.go пересылает это в Kafka, чтобы
+// внешние сервисы (например notifier-service — уведомить админов) сами
+// решали, что делать с фактом регистрации.
+type OnNewUser struct {
+	UserId     int
+	FirstName  string
+	LastName   string
+	Provider   string
+	ExternalId string
+}
+
 type UserService struct {
 	userRepo     UserRepository
 	identityRepo IdentityRepository
 	linkCodeRepo LinkCodeRepository
+	bus          *events.Bus
 }
 
-func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository) *UserService {
-	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo}
+func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository, bus *events.Bus) *UserService {
+	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo, bus: bus}
 }
 
 const (
@@ -187,6 +201,14 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 	if err != nil {
 		return nil, fmt.Errorf("create identity: %w", err)
 	}
+
+	events.Publish(ctx, s.bus, OnNewUser{
+		UserId:     createdUser.Id,
+		FirstName:  createdUser.FirstName,
+		LastName:   createdUser.LastName,
+		Provider:   provider,
+		ExternalId: externalID,
+	})
 
 	return createdUser, nil
 }

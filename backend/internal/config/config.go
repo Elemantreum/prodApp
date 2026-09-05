@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -16,6 +17,7 @@ type Config struct {
 	TelegramBotToken string
 	VKAppSecretKey   string
 	JWTSigningKey    string
+	KafkaBrokers     []string
 }
 
 func LoadConfig() (*Config, error) {
@@ -29,6 +31,7 @@ func LoadConfig() (*Config, error) {
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		VKAppSecretKey:   os.Getenv("VK_APP_SECRET_KEY"),
 		JWTSigningKey:    os.Getenv("JWT_SIGNING_KEY"),
+		KafkaBrokers:     strings.Split(os.Getenv("KAFKA_BROKERS"), ","),
 	}
 
 	if cfg.DBHost == "" {
@@ -57,6 +60,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.JWTSigningKey == "" {
 		return nil, fmt.Errorf("JWT_SIGNING_KEY env var not set")
+	}
+	if len(cfg.KafkaBrokers) == 0 {
+		return nil, fmt.Errorf("KAFKA_BROKERS env var not set")
 	}
 
 	return cfg, nil

@@ -3,17 +3,16 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"prodApp/internal/booking"
 	"prodApp/internal/config"
-	"prodApp/internal/notifier"
 	"prodApp/internal/platform/auth"
 	"prodApp/internal/platform/db"
 	"prodApp/internal/platform/events"
+	"prodApp/internal/platform/kafka"
 	"prodApp/internal/training"
 	"prodApp/internal/user"
 	"syscall"
@@ -68,15 +67,12 @@ func main() {
 	psqlIdentityRepo := user.NewPostgresIdentityRepository(pool)
 	psqlLinkCodeRepo := user.NewPostgresLinkCodeRepository(pool)
 
-	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo)
+	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo, bus)
 	userHandler := user.NewUserHandler(userService)
 
-	var notifiers []notifier.Notifier
-
-	tgNotifier := notifier.NewTelegramNotifier(cfg.TelegramBotToken, userService)
-	//vkNotifier := notifier.NewVkNotifier(cfg.VKAppSecretKey, userService)
-
-	notifiers = append(notifiers, tgNotifier)
+	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
+		kafka.TopicTrainingCreated, kafka.TopicTrainingUpdated, kafka.TopicUserCreated)
+	defer kafkaProducer.Close()
 
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
 	trainingService := training.NewTrainingService(psqlTrainingRepo, bus)
@@ -97,29 +93,32 @@ func main() {
 
 	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, userService)
 
-	events.Subscribe(bus, func(ctx context.Context, createTraining training.OnCreateTraining) {
-
+	// Пересылка in-process событий в Kafka 1:1, без интерпретации — что
+	// делать с фактом "тренировка создана/изменена" или "новый юзер"
+	// решает уже подписчик по ту сторону (notifier-service и любой другой
+	// будущий сервис). В горутине и на отдельном ctx — публикация в Kafka не
+	// должна ни блокировать HTTP-ответ, ни оборваться, если исходный запрос
+	// уже завершился к моменту как Publish дойдёт до этого хендлера.
+	events.Subscribe(bus, func(_ context.Context, e training.OnCreateTraining) {
 		go func() {
-			ctx = context.Background()
-
-			users, err := userService.ListUsers(ctx)
-
-			if err != nil {
+			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicTrainingCreated, e); err != nil {
 				log.Println(err)
 			}
+		}()
+	})
 
-			var userIds = make([]int, 0, len(users))
-
-			for _, user := range users {
-				userIds = append(userIds, user.Id)
+	events.Subscribe(bus, func(_ context.Context, e training.OnUpdateTraining) {
+		go func() {
+			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicTrainingUpdated, e); err != nil {
+				log.Println(err)
 			}
+		}()
+	})
 
-			for _, notifier := range notifiers {
-				err := notifier.NotifyMany(ctx, userIds, fmt.Sprintf("Новая тренировка! На этот раз вас будут ебать на %s в %s", createTraining.Description, createTraining.Date.Format("15:04 15.04")))
-
-				if err != nil {
-					log.Println(err)
-				}
+	events.Subscribe(bus, func(_ context.Context, e user.OnNewUser) {
+		go func() {
+			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicUserCreated, e); err != nil {
+				log.Println(err)
 			}
 		}()
 	})
