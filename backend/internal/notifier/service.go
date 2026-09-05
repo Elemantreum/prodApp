@@ -1,10 +1,16 @@
 package notifier
 
-import "context"
+type Service struct {
+	telegram Sender
+	vk       Sender
+}
 
-type Notifier interface {
-	Notify(ctx context.Context, chatId int, msg string) error
-	NotifyMany(ctx context.Context, chatId []int, msg string) error
-	//NotifyAll(ctx context.Context, msg string) error
-	//NotifyAdmins(ctx context.Context, msg string) error
+func NewService(
+	telegram Sender,
+	vk Sender,
+) *Service {
+	return &Service{
+		telegram: telegram,
+		vk:       vk,
+	}
 }

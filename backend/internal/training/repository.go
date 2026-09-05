@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"prodApp/internal/platform/apperrors"
+	"prodApp/backend/internal/platform/apperrors"
 	"time"
 
 	"github.com/jackc/pgx/v5"

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package notifier;
+
+option go_package = "prodApp/proto/gen/notifierpb";
+
+service NotifierService {
+  rpc Notify(NotifyRequest) returns (NotifyResponse);
+  rpc NotifyMany(NotifyManyRequest) returns (NotifyResponse);
+}
+
+message NotifyRequest {
+  int64 recipient_id = 1;
+  string message = 2;
+}
+
+message NotifyManyRequest {
+  repeated int64 recipient_ids = 1;
+  string message = 2;
+}
+
+message NotifyResponse {}

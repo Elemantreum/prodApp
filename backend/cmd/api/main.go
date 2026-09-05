@@ -3,27 +3,30 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"prodApp/internal/booking"
-	"prodApp/internal/config"
-	"prodApp/internal/notifier"
-	"prodApp/internal/platform/auth"
-	"prodApp/internal/platform/db"
-	"prodApp/internal/platform/events"
-	"prodApp/internal/training"
-	"prodApp/internal/user"
+	"prodApp/backend/internal/booking"
+	"prodApp/backend/internal/config"
+	"prodApp/backend/internal/platform/auth"
+	"prodApp/backend/internal/platform/db"
+	"prodApp/backend/internal/platform/events"
+	"prodApp/backend/internal/training"
+	"prodApp/backend/internal/user"
+	"prodApp/proto/gen/notifierpb"
 	"syscall"
 	"time"
+
+	_ "prodApp/backend/docs"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
-	_ "prodApp/docs"
+	telegraminfra "prodApp/backend/internal/infrastructure/telegram"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 )
@@ -71,12 +74,29 @@ func main() {
 	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo)
 	userHandler := user.NewUserHandler(userService)
 
-	var notifiers []notifier.Notifier
+	tgConn, err := grpc.NewClient(
+		cfg.TgNotifierADDR,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatalf("failed to create tg-notifier grpc client: %v", err)
+	}
+	defer tgConn.Close()
 
-	tgNotifier := notifier.NewTelegramNotifier(cfg.TelegramBotToken, userService)
-	//vkNotifier := notifier.NewVkNotifier(cfg.VKAppSecretKey, userService)
+	tgGrpcClient := notifierpb.NewNotifierServiceClient(tgConn)
 
-	notifiers = append(notifiers, tgNotifier)
+	telegramNotifier := telegraminfra.NewClient(tgGrpcClient)
+
+	err = telegramNotifier.Notify(
+		ctx,
+		12345,
+		"Привет уже из backend",
+	)
+	if err != nil {
+		log.Printf("failed to send notification: %v", err)
+	} else {
+		log.Println("notification sent")
+	}
 
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
 	trainingService := training.NewTrainingService(psqlTrainingRepo, bus)
@@ -112,14 +132,6 @@ func main() {
 
 			for _, user := range users {
 				userIds = append(userIds, user.Id)
-			}
-
-			for _, notifier := range notifiers {
-				err := notifier.NotifyMany(ctx, userIds, fmt.Sprintf("Новая тренировка! На этот раз вас будут ебать на %s в %s", createTraining.Description, createTraining.Date.Format("15:04 15.04")))
-
-				if err != nil {
-					log.Println(err)
-				}
 			}
 		}()
 	})

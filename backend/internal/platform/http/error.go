@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"prodApp/internal/platform/apperrors"
+	"prodApp/backend/internal/platform/apperrors"
 )
 
 var fb *apperrors.ForbiddenError

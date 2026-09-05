@@ -16,6 +16,8 @@ type Config struct {
 	TelegramBotToken string
 	VKAppSecretKey   string
 	JWTSigningKey    string
+	TgNotifierADDR   string
+	VkNotifierADDR   string
 }
 
 func LoadConfig() (*Config, error) {
@@ -29,6 +31,8 @@ func LoadConfig() (*Config, error) {
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		VKAppSecretKey:   os.Getenv("VK_APP_SECRET_KEY"),
 		JWTSigningKey:    os.Getenv("JWT_SIGNING_KEY"),
+		TgNotifierADDR:   os.Getenv("TG_NOTIFIER_ADDR"),
+		VkNotifierADDR:   os.Getenv("VK_NOTIFIER_ADDR"),
 	}
 
 	if cfg.DBHost == "" {
@@ -57,6 +61,12 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.JWTSigningKey == "" {
 		return nil, fmt.Errorf("JWT_SIGNING_KEY env var not set")
+	}
+	if cfg.TgNotifierADDR == "" {
+		return nil, fmt.Errorf("TG_NOTIFIER_ADDR env var not set")
+	}
+	if cfg.VkNotifierADDR == "" {
+		return nil, fmt.Errorf("VK_NOTIFIER_ADDR env var not set")
 	}
 
 	return cfg, nil

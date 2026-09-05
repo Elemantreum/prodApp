@@ -3,9 +3,9 @@ package training
 import (
 	"context"
 	"fmt"
-	"prodApp/internal/platform/apperrors"
-	"prodApp/internal/platform/events"
-	http2 "prodApp/internal/platform/http"
+	"prodApp/backend/internal/platform/apperrors"
+	"prodApp/backend/internal/platform/events"
+	http2 "prodApp/backend/internal/platform/http"
 	"time"
 )
 

@@ -15,17 +15,51 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  tg-notifier:
+    build:
+      context: .
+      dockerfile: tg-notifier/Dockerfile
+    env_file:
+      - .env
+    environment:
+      GRPC_PORT: 50051
+    expose:
+      - "50051"
+
+  vk-notifier:
+    build:
+      context: .
+      dockerfile: vk-notifier/Dockerfile
+    env_file:
+      - .env
+    environment:
+      GRPC_PORT: 50052
+    expose:
+      - "50052"
+
   backend:
     build:
-      context: backend/
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+
+      TG_NOTIFIER_ADDR: tg-notifier:50051
+      VK_NOTIFIER_ADDR: vk-notifier:50052
     depends_on:
       postgres:
         condition: service_healthy
+      tg-notifier:
+        condition: service_started
+      vk-notifier:
+        condition: service_started
+
   frontend:
     build:
       context: frontend/

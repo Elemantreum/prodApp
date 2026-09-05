@@ -1,17 +1,29 @@
 FROM golang:1.26.1-alpine AS builder
+
 WORKDIR /app
 
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+COPY backend/ ./backend/
+COPY proto/ ./proto/
 
-COPY go.mod go.sum ./
+RUN go work init ./backend ./proto
+
+WORKDIR /app/backend
+
 RUN go mod download
-COPY . .
 
-RUN swag init -g cmd/api/main.go -o docs
-RUN go build -o server ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -o /app/server \
+    ./cmd/api
+
 
 FROM alpine:latest
+
 WORKDIR /app
+
+RUN apk add --no-cache ca-certificates
+
 COPY --from=builder /app/server .
+
 EXPOSE 8080
+
 CMD ["./server"]

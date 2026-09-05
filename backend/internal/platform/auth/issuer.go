@@ -3,7 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
-	http2 "prodApp/internal/platform/http"
+	http2 "prodApp/backend/internal/platform/http"
 	"strconv"
 	"time"
 

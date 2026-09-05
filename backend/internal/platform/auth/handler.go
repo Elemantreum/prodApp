@@ -3,11 +3,11 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
-	"prodApp/internal/platform/apperrors"
+	"prodApp/backend/internal/platform/apperrors"
 	"strings"
 
-	http2 "prodApp/internal/platform/http"
-	"prodApp/internal/user"
+	http2 "prodApp/backend/internal/platform/http"
+	"prodApp/backend/internal/user"
 )
 
 type AuthHandler struct {

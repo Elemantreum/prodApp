@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"prodApp/internal/platform/apperrors"
-	http2 "prodApp/internal/platform/http"
+	"prodApp/backend/internal/platform/apperrors"
+	http2 "prodApp/backend/internal/platform/http"
 	"time"
 )
 

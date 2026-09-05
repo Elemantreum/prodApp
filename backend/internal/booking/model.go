@@ -1,7 +1,7 @@
 package booking
 
 import (
-	"prodApp/internal/user"
+	"prodApp/backend/internal/user"
 	"time"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"prodApp/internal/platform/apperrors"
+	"prodApp/backend/internal/platform/apperrors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

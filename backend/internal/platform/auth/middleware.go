@@ -2,7 +2,7 @@ package auth
 
 import (
 	"net/http"
-	http2 "prodApp/internal/platform/http"
+	http2 "prodApp/backend/internal/platform/http"
 	"strings"
 )
 

@@ -3,10 +3,10 @@ package booking
 import (
 	"context"
 	"fmt"
-	"prodApp/internal/platform/apperrors"
-	http2 "prodApp/internal/platform/http"
-	"prodApp/internal/training"
-	"prodApp/internal/user"
+	"prodApp/backend/internal/platform/apperrors"
+	http2 "prodApp/backend/internal/platform/http"
+	"prodApp/backend/internal/training"
+	"prodApp/backend/internal/user"
 	"time"
 )
 
