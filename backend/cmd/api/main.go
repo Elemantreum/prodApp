@@ -11,6 +11,7 @@ import (
 	"prodApp/internal/config"
 	"prodApp/internal/platform/auth"
 	"prodApp/internal/platform/db"
+	http2 "prodApp/internal/platform/http"
 	"prodApp/internal/platform/kafka"
 	"prodApp/internal/platform/outbox"
 	"prodApp/internal/training"
@@ -97,6 +98,19 @@ func main() {
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders: []string{"Authorization", "Content-Type"},
 	}))
+
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		err = pool.Ping(ctx)
+
+		if err != nil {
+			http2.RespondError(w, err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
 
 	router.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.PersistAuthorization(true),
