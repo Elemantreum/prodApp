@@ -15,10 +15,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  # Однонодовый Kafka в KRaft-режиме (без ZooKeeper) — для локальной/
-  # небольшой инсталляции этого достаточно. 9094 — отдельный listener для
-  # хоста (можно смотреть топики снаружи contейнеров, например kcat), 9092 —
-  # для остальных сервисов внутри compose-сети.
   kafka:
     image: apache/kafka:latest
     environment:
@@ -32,8 +28,17 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
     ports:
-      - "9094:9094"
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "kafka"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
   backend:
     build:
       context: backend/
@@ -47,13 +52,18 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-  notifier:
+  tg-notifier:
     build:
-      context: notifier-service/
+      context: tg-notifier/
       dockerfile: Dockerfile
     env_file:
       - .env
+    networks:
+      - default
+      - vpn-network
     depends_on:
+      backend:
+        condition: service_started
       postgres:
         condition: service_healthy
       kafka:
@@ -69,5 +79,11 @@ services:
     depends_on:
       - backend
 
+
 volumes:
   postgres_data:
+
+networks:
+  vpn-network:
+    external: true
+

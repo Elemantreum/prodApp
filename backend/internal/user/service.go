@@ -5,10 +5,11 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"prodApp/internal/platform/apperrors"
-	"prodApp/internal/platform/events"
 	http2 "prodApp/internal/platform/http"
+	"prodApp/internal/platform/outbox"
 	"time"
 )
 
@@ -37,10 +38,12 @@ type LinkCodeRepository interface {
 	FindAndDelete(ctx context.Context, code string) (*LinkCode, error)
 }
 
-// OnNewUser публикуется в EnsureProfile при создании НОВОГО пользователя
-// (не при обычном повторном логине) — main.go пересылает это в Kafka, чтобы
-// внешние сервисы (например notifier-service — уведомить админов) сами
-// решали, что делать с фактом регистрации.
+// OnNewUser публикуется через outbox (см. platform/outbox — топик = имя
+// типа события, "OnNewUser") в EnsureProfile при создании НОВОГО
+// пользователя (не при обычном повторном логине). Отдельный релей (main.go)
+// вычитывает outbox и публикует в Kafka; внешние сервисы (например
+// tg-notifier — уведомить админов) сами решают, что делать с фактом
+// регистрации.
 type OnNewUser struct {
 	UserId     int
 	FirstName  string
@@ -53,11 +56,11 @@ type UserService struct {
 	userRepo     UserRepository
 	identityRepo IdentityRepository
 	linkCodeRepo LinkCodeRepository
-	bus          *events.Bus
+	outbox       *outbox.Repository
 }
 
-func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository, bus *events.Bus) *UserService {
-	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo, bus: bus}
+func NewUserService(userRepo UserRepository, identityRepo IdentityRepository, linkCodeRepo LinkCodeRepository, outboxRepo *outbox.Repository) *UserService {
+	return &UserService{userRepo: userRepo, identityRepo: identityRepo, linkCodeRepo: linkCodeRepo, outbox: outboxRepo}
 }
 
 const (
@@ -202,13 +205,20 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 		return nil, fmt.Errorf("create identity: %w", err)
 	}
 
-	events.Publish(ctx, s.bus, OnNewUser{
+	event := OnNewUser{
 		UserId:     createdUser.Id,
 		FirstName:  createdUser.FirstName,
 		LastName:   createdUser.LastName,
 		Provider:   provider,
 		ExternalId: externalID,
-	})
+	}
+
+	// См. пояснение про транзакционность в training.AddTraining/пакете
+	// outbox — сбой записи здесь не должен проваливать уже состоявшуюся
+	// регистрацию пользователя.
+	if err := outbox.Create(ctx, s.outbox, event); err != nil {
+		log.Printf("outbox: %v", err)
+	}
 
 	return createdUser, nil
 }

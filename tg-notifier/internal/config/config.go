@@ -24,7 +24,7 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		KafkaBrokers:       strings.Split(getEnvOrDefault("KAFKA_BROKERS", "kafka:9092"), ","),
-		KafkaConsumerGroup: getEnvOrDefault("KAFKA_CONSUMER_GROUP", "notifier-service"),
+		KafkaConsumerGroup: getEnvOrDefault("KAFKA_CONSUMER_GROUP", "tg-notifier"),
 		TelegramBotToken:   os.Getenv("TELEGRAM_BOT_TOKEN"),
 		DBHost:             os.Getenv("DB_HOST"),
 		DBPort:             getEnvOrDefault("DB_PORT", "5432"),

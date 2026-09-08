@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	log.Printf("notifier-service: start")
+	log.Printf("tg-notifier: start")
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -46,7 +46,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, kafka.TopicTrainingCreated,
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnCreateTraining",
 			func(ctx context.Context, e events.OnCreateTraining) {
 				chatIDs, err := recipients.AllTelegramChatIDs(ctx)
 				if err != nil {
@@ -63,7 +63,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, kafka.TopicTrainingUpdated,
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnUpdateTraining",
 			func(ctx context.Context, e events.OnUpdateTraining) {
 				chatIDs, err := recipients.AllTelegramChatIDs(ctx)
 				if err != nil {
@@ -80,7 +80,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, kafka.TopicUserCreated,
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnNewUser",
 			func(ctx context.Context, e events.OnNewUser) {
 				chatIDs, err := recipients.AdminTelegramChatIDs(ctx)
 				if err != nil {
@@ -99,5 +99,5 @@ func main() {
 	}()
 
 	wg.Wait()
-	log.Printf("notifier-service: shutting down")
+	log.Printf("tg-notifier: shutting down")
 }

@@ -23,7 +23,7 @@ func Consume[T any](ctx context.Context, brokers []string, groupID, topic string
 	})
 	defer reader.Close()
 
-	log.Printf("notifier-service: listening on topic %q", topic)
+	log.Printf("tg-notifier: listening on topic %q", topic)
 
 	for {
 		m, err := reader.ReadMessage(ctx)

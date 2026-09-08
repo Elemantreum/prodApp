@@ -3,11 +3,10 @@ package training
 import (
 	"context"
 	"fmt"
+	"log"
 	"prodApp/internal/platform/apperrors"
-	"prodApp/internal/platform/events"
 	http2 "prodApp/internal/platform/http"
-	"prodApp/internal/platform/kafka"
-	"reflect"
+	"prodApp/internal/platform/outbox"
 	"time"
 )
 
@@ -34,12 +33,12 @@ type RecurringTrainingRepository interface {
 }
 
 type TrainingService struct {
-	repo          TrainingRepository
-	kafkaProducer *kafka.Producer
+	repo   TrainingRepository
+	outbox *outbox.Repository
 }
 
-func NewTrainingService(repo TrainingRepository, kafkaProducer *kafka.Producer) *TrainingService {
-	return &TrainingService{repo: repo, kafkaProducer: kafkaProducer}
+func NewTrainingService(repo TrainingRepository, outboxRepo *outbox.Repository) *TrainingService {
+	return &TrainingService{repo: repo, outbox: outboxRepo}
 }
 
 func (s *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
@@ -73,10 +72,13 @@ func (s *TrainingService) AddTraining(ctx context.Context, description string, d
 		Duration:    duration,
 	}
 
-	err = kafka.Publish(ctx, s.kafkaProducer, reflect.TypeOf(event).Name(), event)
-
-	if err != nil {
-		return saved, fmt.Errorf("publishing training: %w", err)
+	// Сбой записи в outbox не должен проваливать уже состоявшееся создание
+	// тренировки — тренировка реально создана, клиенту это нужно увидеть как
+	// успех. Пока Create не в одной транзакции с repo.Create (см. пакет
+	// outbox), возможна нестыковка "тренировка есть, события нет" — это
+	// осознанно оставлено на потом.
+	if err := outbox.Create(ctx, s.outbox, event); err != nil {
+		log.Printf("outbox: %v", err)
 	}
 
 	return saved, nil
@@ -111,14 +113,18 @@ func (s *TrainingService) UpdateTraining(ctx context.Context, id int, descriptio
 		return nil, fmt.Errorf("finding updated training: %w", err)
 	}
 
-	events.Publish(ctx, s.bus, OnUpdateTraining{
+	event := OnUpdateTraining{
 		TrainingId:  updated.Id,
 		Description: updated.Description,
 		Date:        updated.Date,
 		MaxQuantity: updated.MaxQuantity,
 		Duration:    updated.Duration,
 		IsActive:    updated.IsActive,
-	})
+	}
+
+	if err := outbox.Create(ctx, s.outbox, event); err != nil {
+		log.Printf("outbox: %v", err)
+	}
 
 	return updated, nil
 }

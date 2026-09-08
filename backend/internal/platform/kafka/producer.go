@@ -1,14 +1,12 @@
-// Package kafka — тонкая обёртка-продьюсер поверх Kafka. Публикует сырые
-// доменные события как есть (см. training.OnCreateTraining, user.OnNewUser
-// и т.п.) — какой текст слать и кому решает уже подписчик (notifier-service
-// и любой другой будущий сервис, которому это интересно), не мы. Пакет
-// намеренно leaf — ничего доменного не импортирует, работает с любым типом
-// события через дженерик.
+// Package kafka — тонкая обёртка-продьюсер поверх Kafka. С переходом на
+// Transactional Outbox (см. platform/outbox) единственный, кто сюда
+// пишет — релей в main.go: вычитывает неопубликованные записи outbox (уже
+// сериализованные в JSON) и публикует их как есть. Пакет намеренно leaf —
+// ничего доменного не импортирует, топики ему называют по имени явно.
 package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	kafkago "github.com/segmentio/kafka-go"
@@ -19,7 +17,8 @@ type Producer struct {
 }
 
 // NewProducer сразу поднимает по одному Writer'у на каждый переданный топик —
-// топики известны заранее (см. Topic* константы), лениво создавать нечего.
+// топики известны заранее (см. training.Topic*/user.Topic*), лениво
+// создавать нечего.
 func NewProducer(brokers []string, topics ...string) *Producer {
 	writers := make(map[string]*kafkago.Writer, len(topics))
 	for _, topic := range topics {
@@ -32,18 +31,13 @@ func NewProducer(brokers []string, topics ...string) *Producer {
 	return &Producer{writers: writers}
 }
 
-// Publish сериализует событие в JSON и публикует его в топик. Топик должен
-// быть одним из переданных в NewProducer — иначе явная ошибка, а не молчаливый
-// no-op.
-func Publish[T any](ctx context.Context, p *Producer, topic string, event T) error {
+// PublishRaw публикует уже сериализованный payload в топик. Топик должен
+// быть одним из переданных в NewProducer — иначе явная ошибка, а не
+// молчаливый no-op.
+func (p *Producer) PublishRaw(ctx context.Context, topic string, payload []byte) error {
 	w, ok := p.writers[topic]
 	if !ok {
 		return fmt.Errorf("kafka: no writer configured for topic %q", topic)
-	}
-
-	payload, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("marshal event for topic %q: %w", topic, err)
 	}
 
 	if err := w.WriteMessages(ctx, kafkago.Message{Value: payload}); err != nil {

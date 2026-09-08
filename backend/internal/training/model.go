@@ -44,12 +44,14 @@ type RecurringTraining struct {
 	CreatedAt time.Time     `json:"createdAt" format:"date-time" example:"2002-10-02T15:00:00Z"`
 }
 
-// OnCreateTraining/OnUpdateTraining — доменные события, публикуются в общую
-// in-process шину (см. platform/events); main.go пересылает их как есть в
-// Kafka (см. platform/kafka), чтобы внешние сервисы (notifier-service и
-// потенциально другие — например, будущий сервис логирования) сами решали,
-// что с ними делать. Здесь только факт "что произошло", без решения "кого
-// уведомлять и как" — это уже дело подписчика.
+// OnCreateTraining/OnUpdateTraining — доменные события. Публикуются через
+// outbox (см. platform/outbox — топик = имя типа события, "OnCreateTraining"/
+// "OnUpdateTraining") вместо прямого похода в Kafka, так запись переживёт
+// краткий даунтайм Kafka и не потеряется. Отдельный релей (main.go)
+// вычитывает outbox и публикует. Внешние сервисы (tg-notifier и
+// потенциально другие — например будущий сервис логирования) сами решают,
+// что делать с фактом "что произошло" — здесь нет решения "кого уведомлять
+// и как", это уже дело подписчика.
 type OnCreateTraining struct {
 	TrainingId  int
 	Description string

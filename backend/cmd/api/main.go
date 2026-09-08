@@ -11,8 +11,8 @@ import (
 	"prodApp/internal/config"
 	"prodApp/internal/platform/auth"
 	"prodApp/internal/platform/db"
-	"prodApp/internal/platform/events"
 	"prodApp/internal/platform/kafka"
+	"prodApp/internal/platform/outbox"
 	"prodApp/internal/training"
 	"prodApp/internal/user"
 	"syscall"
@@ -37,7 +37,6 @@ import (
 // @in                          header
 // @name                        Authorization
 // @description                 Введите токен в формате: Bearer {token}
-
 func main() {
 	log.Printf("start main")
 
@@ -61,21 +60,17 @@ func main() {
 	}
 	defer pool.Close()
 
-	bus := events.NewBus()
+	outboxRepo := outbox.NewRepository(pool)
 
 	psqlUserRepo := user.NewPostgresUserRepository(pool)
 	psqlIdentityRepo := user.NewPostgresIdentityRepository(pool)
 	psqlLinkCodeRepo := user.NewPostgresLinkCodeRepository(pool)
 
-	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo, bus)
+	userService := user.NewUserService(psqlUserRepo, psqlIdentityRepo, psqlLinkCodeRepo, outboxRepo)
 	userHandler := user.NewUserHandler(userService)
 
-	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
-		kafka.TopicTrainingCreated, kafka.TopicTrainingUpdated, kafka.TopicUserCreated)
-	defer kafkaProducer.Close()
-
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
-	trainingService := training.NewTrainingService(psqlTrainingRepo, bus)
+	trainingService := training.NewTrainingService(psqlTrainingRepo, outboxRepo)
 
 	psqlBookingRepo := booking.NewPostgresBookingRepository(pool)
 	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo, psqlIdentityRepo)
@@ -92,36 +87,6 @@ func main() {
 	authMiddleware := auth.AuthMiddleware(tokenIssuer)
 
 	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, userService)
-
-	// Пересылка in-process событий в Kafka 1:1, без интерпретации — что
-	// делать с фактом "тренировка создана/изменена" или "новый юзер"
-	// решает уже подписчик по ту сторону (notifier-service и любой другой
-	// будущий сервис). В горутине и на отдельном ctx — публикация в Kafka не
-	// должна ни блокировать HTTP-ответ, ни оборваться, если исходный запрос
-	// уже завершился к моменту как Publish дойдёт до этого хендлера.
-	events.Subscribe(bus, func(_ context.Context, e training.OnCreateTraining) {
-		go func() {
-			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicTrainingCreated, e); err != nil {
-				log.Println(err)
-			}
-		}()
-	})
-
-	events.Subscribe(bus, func(_ context.Context, e training.OnUpdateTraining) {
-		go func() {
-			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicTrainingUpdated, e); err != nil {
-				log.Println(err)
-			}
-		}()
-	})
-
-	events.Subscribe(bus, func(_ context.Context, e user.OnNewUser) {
-		go func() {
-			if err := kafka.Publish(context.Background(), kafkaProducer, kafka.TopicUserCreated, e); err != nil {
-				log.Println(err)
-			}
-		}()
-	})
 
 	router := chi.NewRouter()
 
@@ -248,6 +213,46 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			deactivate()
+		}
+	}()
+
+	// Продьюсер теперь используется только релеем аутбокса ниже — сервисы
+	// сами в Kafka больше не ходят, только пишут в outbox (см. platform/outbox).
+	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
+		"OnCreateTraining", "OnUpdateTraining", "OnNewUser")
+	defer kafkaProducer.Close()
+
+	// Outbox-релей: периодически вычитывает ещё не опубликованные записи
+	// (см. platform/outbox) и шлёт их в Kafka как есть — payload там уже
+	// сериализован сервисом, который его туда положил, релей его не трогает.
+	// Тикаем часто — цель в том, чтобы задержка между "событие записано" и
+	// "событие в Kafka" была небольшой, а не в том, чтобы экономить нагрузку.
+	go func() {
+		dispatch := func() {
+			entries, err := outboxRepo.FindUnpublished(context.Background(), 100)
+			if err != nil {
+				log.Printf("outbox: find unpublished: %v", err)
+				return
+			}
+
+			for _, entry := range entries {
+				if err := kafkaProducer.PublishRaw(context.Background(), entry.Topic, entry.Payload); err != nil {
+					log.Printf("outbox: publish entry %d to %q: %v", entry.Id, entry.Topic, err)
+					continue
+				}
+
+				if err := outboxRepo.MarkPublished(context.Background(), entry.Id); err != nil {
+					log.Printf("outbox: mark entry %d published: %v", entry.Id, err)
+				}
+			}
+		}
+
+		dispatch()
+
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			dispatch()
 		}
 	}()
 
