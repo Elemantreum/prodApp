@@ -127,6 +127,28 @@ export const api = {
     return request<AuthResponse>(`/auth/vk/link?${query}`, { method: "POST" }, { skipAuthRetry: true });
   },
 
+  /** Exchanges a still-valid refresh token for a fresh pair (rotation — the
+   *  old refresh token is consumed server-side). `skipAuthRetry` because a
+   *  401 here means the refresh token itself is dead, not that this request
+   *  needs a retry via unauthorizedHandler (which would just call this again). */
+  refreshToken(refreshToken: string): Promise<AuthResponse> {
+    return request<AuthResponse>(
+      "/auth/refresh",
+      { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) },
+      { skipAuthRetry: true },
+    );
+  },
+
+  /** Revokes a refresh token server-side (logout). Best-effort from the
+   *  caller's point of view — local storage gets cleared regardless. */
+  logout(refreshToken: string): Promise<void> {
+    return request<void>(
+      "/auth/logout",
+      { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) },
+      { skipAuthRetry: true },
+    );
+  },
+
   getTrainings(): Promise<Training[]> {
     // Go marshals a nil slice as JSON `null`, not `[]` — always normalize to
     // an array here so callers never have to null-check before .filter/.map.

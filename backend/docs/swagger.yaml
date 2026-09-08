@@ -5,9 +5,16 @@ definitions:
       code:
         type: string
     type: object
+  auth.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
   auth.tokenResponse:
     properties:
       access_token:
+        type: string
+      refresh_token:
         type: string
     type: object
   booking.Booking:
@@ -310,6 +317,58 @@ info:
   title: ProdApp API
   version: "1.0"
 paths:
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: refresh_token не указан
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Отозвать refresh token
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 'Ротация: предъявленный refresh token сразу отзывается, взамен
+        выдаётся новая пара. Повторное предъявление того же токена (например, украденного)
+        больше не сработает.'
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.tokenResponse'
+        "400":
+          description: refresh_token не указан
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: невалидный/истёкший/отозванный refresh token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Обновить access token по refresh token'у
+      tags:
+      - auth
   /auth/telegram:
     post:
       produces:

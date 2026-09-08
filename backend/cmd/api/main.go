@@ -85,9 +85,10 @@ func main() {
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
 	tokenIssuer := auth.NewTokenIssuer(cfg.JWTSigningKey)
+	refreshTokenRepo := auth.NewRefreshTokenRepository(pool)
 	authMiddleware := auth.AuthMiddleware(tokenIssuer)
 
-	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, userService)
+	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, refreshTokenRepo, userService)
 
 	router := chi.NewRouter()
 
@@ -122,6 +123,8 @@ func main() {
 			r.Post("/vk", authHandler.VKLogin)
 			r.Post("/telegram/link", authHandler.TelegramLink)
 			r.Post("/vk/link", authHandler.VKLink)
+			r.Post("/refresh", authHandler.Refresh)
+			r.Post("/logout", authHandler.Logout)
 		})
 
 		r.Group(func(r chi.Router) {

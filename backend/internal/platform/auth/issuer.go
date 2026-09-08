@@ -11,15 +11,27 @@ import (
 )
 
 type TokenIssuer struct {
-	signingKey     []byte
-	accessTokenTTL time.Duration
+	signingKey      []byte
+	accessTokenTTL  time.Duration
+	refreshTokenTTL time.Duration
 }
 
 func NewTokenIssuer(signingKey string) *TokenIssuer {
 	return &TokenIssuer{
-		signingKey:     []byte(signingKey),
+		signingKey: []byte(signingKey),
+		// access живёт недолго и не отзываем — если утечёт, максимум
+		// вреда ограничен этим окном (см. предупреждение в claims.go).
 		accessTokenTTL: 15 * time.Minute,
+		// refresh живёт долго, но хранится в БД как хэш и отзывается
+		// (logout, ротация) — см. RefreshTokenRepository.
+		refreshTokenTTL: 30 * 24 * time.Hour,
 	}
+}
+
+// RefreshTokenTTL — на сколько выдавать refresh token. Публичный геттер,
+// а не константа в auth-хендлере, чтобы политика жила в одном месте.
+func (t *TokenIssuer) RefreshTokenTTL() time.Duration {
+	return t.refreshTokenTTL
 }
 
 func (t *TokenIssuer) IssueAccessToken(userID int, isAdmin, isApproved bool) (string, error) {

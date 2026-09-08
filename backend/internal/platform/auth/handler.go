@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"prodApp/internal/platform/apperrors"
 	"strings"
@@ -14,14 +15,16 @@ type AuthHandler struct {
 	tgAuth      *TelegramAuthenticator
 	vkAuth      *VKAuthenticator
 	tokenIssuer *TokenIssuer
+	refreshRepo *RefreshTokenRepository
 	userService *user.UserService
 }
 
-func NewAuthHandler(tgAuth *TelegramAuthenticator, vkAuth *VKAuthenticator, tokenIssuer *TokenIssuer, userService *user.UserService) *AuthHandler {
+func NewAuthHandler(tgAuth *TelegramAuthenticator, vkAuth *VKAuthenticator, tokenIssuer *TokenIssuer, refreshRepo *RefreshTokenRepository, userService *user.UserService) *AuthHandler {
 	return &AuthHandler{
 		tgAuth:      tgAuth,
 		vkAuth:      vkAuth,
 		tokenIssuer: tokenIssuer,
+		refreshRepo: refreshRepo,
 		userService: userService,
 	}
 }
@@ -131,17 +134,12 @@ func (h *AuthHandler) linkAndRespond(w http.ResponseWriter, r *http.Request, pri
 		return
 	}
 
-	token, err := h.tokenIssuer.IssueAccessToken(appUser.Id, appUser.IsAdmin, appUser.IsApproved)
-	if err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	http2.RespondJSON(w, http.StatusOK, tokenResponse{AccessToken: token})
+	h.issueTokenPairAndRespond(w, r, appUser)
 }
 
 type tokenResponse struct {
-	AccessToken string `json:"access_token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *AuthHandler) issueAndRespond(w http.ResponseWriter, r *http.Request, principal *Principal) {
@@ -151,11 +149,98 @@ func (h *AuthHandler) issueAndRespond(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 
-	token, err := h.tokenIssuer.IssueAccessToken(appUser.Id, appUser.IsAdmin, appUser.IsApproved)
+	h.issueTokenPairAndRespond(w, r, appUser)
+}
+
+// issueTokenPairAndRespond — общий финальный шаг для всех "входных" ручек
+// (login/link): выпускает и короткоживущий access token, и долгоживущий
+// refresh token, и отдаёт пару клиенту.
+func (h *AuthHandler) issueTokenPairAndRespond(w http.ResponseWriter, r *http.Request, appUser *user.User) {
+	access, err := h.tokenIssuer.IssueAccessToken(appUser.Id, appUser.IsAdmin, appUser.IsApproved)
 	if err != nil {
 		http2.RespondError(w, err)
 		return
 	}
 
-	http2.RespondJSON(w, http.StatusOK, tokenResponse{AccessToken: token})
+	refresh, err := h.refreshRepo.Create(r.Context(), appUser.Id, h.tokenIssuer.RefreshTokenTTL())
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	http2.RespondJSON(w, http.StatusOK, tokenResponse{AccessToken: access, RefreshToken: refresh})
+}
+
+// Refresh godoc
+// @Summary      Обновить access token по refresh token'у
+// @Description  Ротация: предъявленный refresh token сразу отзывается, взамен выдаётся новая пара. Повторное предъявление того же токена (например, украденного) больше не сработает.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request  body      refreshRequest  true  "Refresh token"
+// @Success      200      {object}  tokenResponse
+// @Failure      400      {object}  map[string]string  "refresh_token не указан"
+// @Failure      401      {object}  map[string]string  "невалидный/истёкший/отозванный refresh token"
+// @Router       /auth/refresh [post]
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "refresh_token"})
+		return
+	}
+
+	userID, err := h.refreshRepo.FindActiveUserID(r.Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, ErrRefreshTokenInvalid) {
+			http2.RespondError(w, &apperrors.UnauthorizedError{})
+			return
+		}
+		http2.RespondError(w, err)
+		return
+	}
+
+	// Отзываем предъявленный токен сразу — ротация, см. RefreshTokenRepository.Revoke.
+	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	// Перечитываем пользователя из БД, а не доверяем ничему из старого
+	// токена — is_admin/is_approved могли поменяться с момента логина, и
+	// новый access token должен нести уже актуальные значения.
+	appUser, err := h.userService.GetUser(r.Context(), userID)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	h.issueTokenPairAndRespond(w, r, appUser)
+}
+
+// Logout godoc
+// @Summary      Отозвать refresh token
+// @Tags         auth
+// @Accept       json
+// @Success      204
+// @Failure      400  {object}  map[string]string  "refresh_token не указан"
+// @Router       /auth/logout [post]
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "refresh_token"})
+		return
+	}
+
+	// Отзыв невалидного/чужого/уже отозванного токена — не ошибка,
+	// идемпотентно: клиент в любом случае забывает токен у себя.
+	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
