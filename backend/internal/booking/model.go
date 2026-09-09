@@ -30,7 +30,6 @@ type Participant struct {
 	UserId      int       `json:"userId"`
 	FirstName   string    `json:"firstName"`
 	LastName    string    `json:"lastName"`
-	Username    string    `json:"username"`
 	BookingDate time.Time `json:"bookingDate"`
 	// Identities — привязанные платформы участника (провайдер, внешний id,
 	// @-хендл если есть) — фронт строит из них ссылки на vk.com/id.../t.me/... .
@@ -45,7 +44,6 @@ type BookingDetail struct {
 	UserId      int             `json:"userId"`
 	FirstName   string          `json:"firstName"`
 	LastName    string          `json:"lastName"`
-	Username    string          `json:"username"`
 	Status      BookingStatus   `json:"status"`
 	BookingDate time.Time       `json:"bookingDate"`
 	Identities  []user.Identity `json:"identities"`

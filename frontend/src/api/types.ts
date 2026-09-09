@@ -52,7 +52,6 @@ export interface Participant {
   userId: number;
   firstName: string;
   lastName: string;
-  username: string;
   bookingDate: string;
   /** Привязанные платформы — источник для ссылок на VK/Telegram контакты. */
   identities: Identity[];
@@ -66,7 +65,6 @@ export interface BookingDetail {
   userId: number;
   firstName: string;
   lastName: string;
-  username: string;
   status: BookingStatus;
   bookingDate: string;
   identities: Identity[];
@@ -103,7 +101,6 @@ export interface Identity {
 
 export interface User {
   id: number;
-  username: string;
   firstName: string;
   lastName: string;
   isApproved: boolean;

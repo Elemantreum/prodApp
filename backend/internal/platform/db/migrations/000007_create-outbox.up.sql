@@ -1,8 +1,7 @@
 -- Transactional Outbox: сервисы пишут сюда вместо прямой публикации в
 -- Kafka, отдельный релей (см. main.go) вычитывает неопубликованное и шлёт
--- в Kafka. topic = имя топика/события (совпадает с training.TopicXxx /
--- user.TopicXxx и именами топиков в tg-notifier), payload — уже
--- сериализованное в JSON тело события.
+-- в Kafka. topic = имя топика/события (совпадает с именами структур событий
+-- и топиков в tg-notifier), payload — уже сериализованное в JSON тело события.
 --
 -- ВАЖНО: сейчас запись сюда НЕ в одной транзакции с записью в доменную
 -- таблицу (training.AddTraining/UpdateTraining, user.EnsureProfile просто

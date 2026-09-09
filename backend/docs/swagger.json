@@ -1926,9 +1926,6 @@
                 },
                 "userId": {
                     "type": "integer"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },
@@ -1962,9 +1959,6 @@
                 },
                 "userId": {
                     "type": "integer"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },
@@ -2269,9 +2263,6 @@
                     "type": "string"
                 },
                 "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }

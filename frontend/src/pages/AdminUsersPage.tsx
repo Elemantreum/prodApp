@@ -75,7 +75,7 @@ export function AdminUsersPage() {
   const filteredUsers = users?.filter((u) => {
     if (!normalizedQuery) return true;
     const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
-    return fullName.includes(normalizedQuery) || u.username.toLowerCase().includes(normalizedQuery);
+    return fullName.includes(normalizedQuery);
   });
 
   return (

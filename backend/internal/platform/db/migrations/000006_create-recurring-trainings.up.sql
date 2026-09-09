@@ -6,6 +6,7 @@ CREATE TABLE recurring_trainings (
     id SERIAL PRIMARY KEY,
     description VARCHAR(255) NOT NULL,
     anchor_date TIMESTAMPTZ NOT NULL,
+    lead_time_ns BIGINT NOT NULL DEFAULT 2419200000000000,
     max_quantity INT NOT NULL,
     duration_ns BIGINT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,

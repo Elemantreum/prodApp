@@ -180,7 +180,6 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 
 	// identity не найдена — создаём нового пользователя + первую привязку
 	newUser := &User{
-		Username:   fmt.Sprintf("%s:%s", provider, externalID),
 		FirstName:  firstName,
 		LastName:   lastName,
 		IsApproved: false,
@@ -249,73 +248,6 @@ func (s *UserService) LinkIdentity(ctx context.Context, userID int, provider, ex
 		return fmt.Errorf("link identity: %w", err)
 	}
 	return nil
-}
-
-func (s *UserService) AuthenticateViaTelegram(ctx context.Context, telegramID string, firstName string, lastName string) (*User, error) {
-	identity, err := s.identityRepo.FindByProviderAndExternalID(ctx, "telegram", telegramID)
-	if err == nil {
-		return s.userRepo.FindById(ctx, identity.UserId)
-	}
-	if !errors.Is(err, apperrors.NotFoundError{}) {
-		return nil, fmt.Errorf("find identity: %w", err)
-	}
-
-	user, err := s.userRepo.Create(ctx, &User{FirstName: firstName, LastName: lastName})
-	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	_, err = s.identityRepo.Create(ctx, &Identity{
-		UserId:     user.Id,
-		Provider:   "telegram",
-		ExternalId: telegramID,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("create identity: %w", err)
-	}
-
-	return user, nil
-}
-
-func (s *UserService) AuthenticateViaVK(ctx context.Context, telegramID string, firstName string, lastName string) (*User, error) {
-	identity, err := s.identityRepo.FindByProviderAndExternalID(ctx, "vk", telegramID)
-	if err == nil {
-		return s.userRepo.FindById(ctx, identity.UserId)
-	}
-	if !errors.Is(err, apperrors.NotFoundError{}) {
-		return nil, fmt.Errorf("find identity: %w", err)
-	}
-
-	user, err := s.userRepo.Create(ctx, &User{FirstName: firstName, LastName: lastName})
-	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	_, err = s.identityRepo.Create(ctx, &Identity{
-		UserId:     user.Id,
-		Provider:   "vk",
-		ExternalId: telegramID,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("create identity: %w", err)
-	}
-
-	return user, nil
-}
-
-func (service *UserService) NewUser(ctx context.Context, firstName string, lastName string) (*User, error) {
-
-	var user *User = &User{FirstName: firstName, LastName: lastName}
-
-	saved, err := service.userRepo.Create(ctx, user)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to save user: %w", err)
-	}
-
-	return saved, nil
 }
 
 func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {

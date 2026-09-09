@@ -1932,9 +1932,6 @@ const docTemplate = `{
                 },
                 "userId": {
                     "type": "integer"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },
@@ -1968,9 +1965,6 @@ const docTemplate = `{
                 },
                 "userId": {
                     "type": "integer"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },
@@ -2275,9 +2269,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }

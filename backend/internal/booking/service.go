@@ -116,7 +116,6 @@ func (service *BookingService) GetParticipants(ctx context.Context, trainingId i
 			UserId:      b.UserId,
 			FirstName:   u.FirstName,
 			LastName:    u.LastName,
-			Username:    u.Username,
 			BookingDate: b.BookingDate,
 			Identities:  identities,
 		})
@@ -162,7 +161,6 @@ func (service *BookingService) GetTrainingBookings(ctx context.Context, training
 			UserId:      b.UserId,
 			FirstName:   u.FirstName,
 			LastName:    u.LastName,
-			Username:    u.Username,
 			Status:      b.Status,
 			BookingDate: b.BookingDate,
 			Identities:  identities,

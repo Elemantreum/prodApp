@@ -144,14 +144,14 @@ func NewPostgresUserRepository(pool *pgxpool.Pool) *PostgresUserRepository {
 
 func (p *PostgresUserRepository) Create(ctx context.Context, user *User) (*User, error) {
 	row := p.pool.QueryRow(ctx,
-		`INSERT INTO users (username, first_name, last_name, is_approved, is_admin, is_registered)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, username, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at`,
-		user.Username, user.FirstName, user.LastName, user.IsApproved, user.IsAdmin, user.IsRegistered,
+		`INSERT INTO users (first_name, last_name, is_approved, is_admin, is_registered)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at`,
+		user.FirstName, user.LastName, user.IsApproved, user.IsAdmin, user.IsRegistered,
 	)
 
 	var saved User
-	err := row.Scan(&saved.Id, &saved.Username, &saved.FirstName, &saved.LastName, &saved.IsApproved, &saved.IsAdmin, &saved.IsRegistered, &saved.CreatedAt, &saved.UpdatedAt)
+	err := row.Scan(&saved.Id, &saved.FirstName, &saved.LastName, &saved.IsApproved, &saved.IsAdmin, &saved.IsRegistered, &saved.CreatedAt, &saved.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -160,14 +160,14 @@ func (p *PostgresUserRepository) Create(ctx context.Context, user *User) (*User,
 
 func (p *PostgresUserRepository) Update(ctx context.Context, user *User) (*User, error) {
 	row := p.pool.QueryRow(ctx,
-		`UPDATE users SET username = $2, first_name = $3, last_name = $4, is_approved = $5, is_admin = $6, is_registered = $7, updated_at = now()
+		`UPDATE users SET first_name = $2, last_name = $3, is_approved = $4, is_admin = $5, is_registered = $6, updated_at = now()
 		 WHERE id = $1
-		 RETURNING id, username, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at`,
-		user.Id, user.Username, user.FirstName, user.LastName, user.IsApproved, user.IsAdmin, user.IsRegistered,
+		 RETURNING id, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at`,
+		user.Id, user.FirstName, user.LastName, user.IsApproved, user.IsAdmin, user.IsRegistered,
 	)
 
 	var saved User
-	err := row.Scan(&saved.Id, &saved.Username, &saved.FirstName, &saved.LastName, &saved.IsApproved, &saved.IsAdmin, &saved.IsRegistered, &saved.CreatedAt, &saved.UpdatedAt)
+	err := row.Scan(&saved.Id, &saved.FirstName, &saved.LastName, &saved.IsApproved, &saved.IsAdmin, &saved.IsRegistered, &saved.CreatedAt, &saved.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("user with id %d: %w", user.Id, apperrors.NotFoundError{})
 	}
@@ -191,9 +191,9 @@ func (p *PostgresUserRepository) Delete(ctx context.Context, user *User) error {
 func (p *PostgresUserRepository) FindById(ctx context.Context, id int) (*User, error) {
 	var user User
 	err := p.pool.QueryRow(ctx,
-		`SELECT id, username, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at
+		`SELECT id, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at
 		 FROM users WHERE id = $1`, id,
-	).Scan(&user.Id, &user.Username, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.IsRegistered, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.Id, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.IsRegistered, &user.CreatedAt, &user.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("user with id %d: %w", id, apperrors.NotFoundError{})
@@ -206,7 +206,7 @@ func (p *PostgresUserRepository) FindById(ctx context.Context, id int) (*User, e
 
 func (p *PostgresUserRepository) GetAll(ctx context.Context) ([]User, error) {
 	rows, err := p.pool.Query(ctx,
-		`SELECT id, username, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at FROM users`)
+		`SELECT id, first_name, last_name, is_approved, is_admin, is_registered, created_at, updated_at FROM users`)
 	if err != nil {
 		return nil, fmt.Errorf("get all users: %w", err)
 	}
@@ -215,7 +215,7 @@ func (p *PostgresUserRepository) GetAll(ctx context.Context) ([]User, error) {
 	users := make([]User, 0)
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.Id, &user.Username, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.IsRegistered, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.Id, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.IsRegistered, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		users = append(users, user)
@@ -229,7 +229,7 @@ func (p *PostgresUserRepository) GetAll(ctx context.Context) ([]User, error) {
 
 func (p *PostgresUserRepository) FindAdmins(ctx context.Context) ([]User, error) {
 	rows, err := p.pool.Query(ctx,
-		`SELECT id, username, first_name, last_name, is_approved, is_admin, created_at, updated_at
+		`SELECT id, first_name, last_name, is_approved, is_admin, created_at, updated_at
 			FROM users
 			WHERE is_admin = true
 			`)
@@ -241,7 +241,7 @@ func (p *PostgresUserRepository) FindAdmins(ctx context.Context) ([]User, error)
 	users := make([]User, 0)
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.Id, &user.Username, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.Id, &user.FirstName, &user.LastName, &user.IsApproved, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		users = append(users, user)

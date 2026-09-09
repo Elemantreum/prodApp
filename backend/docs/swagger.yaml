@@ -50,8 +50,6 @@ definitions:
         $ref: '#/definitions/booking.BookingStatus'
       userId:
         type: integer
-      username:
-        type: string
     type: object
   booking.BookingStatus:
     enum:
@@ -76,8 +74,6 @@ definitions:
         type: string
       userId:
         type: integer
-      username:
-        type: string
     type: object
   booking.cancelBookingRequest:
     properties:
@@ -306,8 +302,6 @@ definitions:
       lastName:
         type: string
       updatedAt:
-        type: string
-      username:
         type: string
     type: object
 host: localhost:8080
