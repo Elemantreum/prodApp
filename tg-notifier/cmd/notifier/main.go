@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"prodApp/notifier-service/internal/config"
 	"prodApp/notifier-service/internal/events"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var moscowTZ = time.FixedZone("MSK", 3*60*60)
 
 func main() {
 	log.Printf("tg-notifier: start")
@@ -53,7 +56,7 @@ func main() {
 					log.Printf("training created: resolve recipients: %v", err)
 					return
 				}
-				text := fmt.Sprintf("Новая тренировка! %s в %s", e.Description, e.Date.Format("15:04 02.01"))
+				text := fmt.Sprintf("Новая тренировка! %s в %s", e.Description, e.Date.In(moscowTZ).Format("15:04 02.01"))
 				if err := tgNotifier.NotifyMany(ctx, chatIDs, text); err != nil {
 					log.Printf("training created: notify: %v", err)
 				}
@@ -70,7 +73,7 @@ func main() {
 					log.Printf("training updated: resolve recipients: %v", err)
 					return
 				}
-				text := fmt.Sprintf("Тренировка изменена: %s, теперь %s", e.Description, e.Date.Format("15:04 02.01"))
+				text := fmt.Sprintf("Тренировка изменена: %s, теперь %s", e.Description, e.Date.In(moscowTZ).Format("15:04 02.01"))
 				if err := tgNotifier.NotifyMany(ctx, chatIDs, text); err != nil {
 					log.Printf("training updated: notify: %v", err)
 				}

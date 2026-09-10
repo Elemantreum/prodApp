@@ -67,6 +67,10 @@ services:
     networks:
       - default
       - vpn-network
+    environment:
+      HTTP_PROXY: http://vpn-client:1080
+      HTTPS_PROXY: http://vpn-client:1080
+      NO_PROXY: localhost,127.0.0.1,backend,postgres,kafka
     depends_on:
       backend:
         condition: service_healthy
