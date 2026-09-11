@@ -10,6 +10,7 @@ import (
 	"prodApp/internal/platform/apperrors"
 	http2 "prodApp/internal/platform/http"
 	"prodApp/internal/platform/outbox"
+	"strconv"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type IdentityRepository interface {
 	Reassign(ctx context.Context, provider, externalID, username string, newUserID int) error
 	GetBatchById(ctx context.Context, ids []int, provider string) ([]Identity, error)
 	UpdateUsername(ctx context.Context, provider, externalID, username string) error
+	AdminTelegramChatIds(ctx context.Context) ([]int64, error)
 }
 
 type LinkCodeRepository interface {
@@ -50,6 +52,24 @@ type OnNewUser struct {
 	LastName   string
 	Provider   string
 	ExternalId string
+	// ChatIds — telegram chat id всех админов, уже зарезолвленные на
+	// момент публикации. tg-notifier не имеет своего доступа к Postgres
+	// (см. platform/outbox) и просто рассылает по этому списку.
+	ChatIds []int64
+}
+
+// OnUserApprovalChanged публикуется и в ApproveUser, и в UnapproveUser —
+// адресовано САМОМУ юзеру (не админам), чтобы он узнал об изменении
+// своего статуса. ChatId, а не ChatIds (в отличие от
+// OnNewUser/training.OnCreateTraining) — получатель всегда один.
+type OnUserApprovalChanged struct {
+	UserId int
+	// ChatId — telegram chat id юзера. Событие не публикуется вовсе, если у
+	// него нет привязанного Telegram (см. publishApprovalChanged) — слать
+	// всё равно некому, VK-нотифаер пока не реализован.
+	ChatId int64
+	// Approved — true при одобрении, false при снятии одобрения.
+	Approved bool
 }
 
 type UserService struct {
@@ -204,12 +224,20 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 		return nil, fmt.Errorf("create identity: %w", err)
 	}
 
+	adminChatIds, err := s.identityRepo.AdminTelegramChatIds(ctx)
+	if err != nil {
+		// Не фейлим регистрацию из-за этого — просто разошлём событие без
+		// адресатов, tg-notifier никого не уведомит в этот раз.
+		log.Printf("resolve admin chat ids: %v", err)
+	}
+
 	event := OnNewUser{
 		UserId:     createdUser.Id,
 		FirstName:  createdUser.FirstName,
 		LastName:   createdUser.LastName,
 		Provider:   provider,
 		ExternalId: externalID,
+		ChatIds:    adminChatIds,
 	}
 
 	// См. пояснение про транзакционность в training.AddTraining/пакете
@@ -331,7 +359,41 @@ func (service *UserService) ApproveUser(ctx context.Context, id int) error {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
 
+	service.publishApprovalChanged(ctx, id, true)
+
 	return nil
+}
+
+// publishApprovalChanged шлёт юзеру уведомление об изменении approve-статуса
+// (и одобрение, и снятие одобрения — одно и то же событие, см.
+// OnUserApprovalChanged). Ничего не публикует, если у юзера нет
+// привязанного Telegram (например, только VK) — слать всё равно некому,
+// VK-нотифаер не реализован. Ошибка резолва — лог, не fail: статус уже
+// изменён, это не должно откатывать саму операцию.
+func (service *UserService) publishApprovalChanged(ctx context.Context, userId int, approved bool) {
+	identities, err := service.identityRepo.FindByUserID(ctx, userId)
+	if err != nil {
+		log.Printf("resolve identities for user %d: %v", userId, err)
+		return
+	}
+
+	for _, identity := range identities {
+		if identity.Provider != "telegram" {
+			continue
+		}
+
+		chatId, err := strconv.ParseInt(identity.ExternalId, 10, 64)
+		if err != nil {
+			log.Printf("parse telegram chat id for user %d: %v", userId, err)
+			return
+		}
+
+		event := OnUserApprovalChanged{UserId: userId, ChatId: chatId, Approved: approved}
+		if err := outbox.Create(ctx, service.outbox, event); err != nil {
+			log.Printf("outbox: %v", err)
+		}
+		return
+	}
 }
 
 func (service *UserService) UnapproveUser(ctx context.Context, id int) error {
@@ -348,6 +410,8 @@ func (service *UserService) UnapproveUser(ctx context.Context, id int) error {
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
+
+	service.publishApprovalChanged(ctx, id, false)
 
 	return nil
 }

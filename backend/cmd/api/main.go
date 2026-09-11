@@ -71,16 +71,17 @@ func main() {
 	userHandler := user.NewUserHandler(userService)
 
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
-	trainingService := training.NewTrainingService(psqlTrainingRepo, outboxRepo)
+	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
+	// psqlIdentityRepo реализует training.ChatIdResolver (структурная
+	// типизация — метод AllTelegramChatIds есть, этого достаточно), тот же
+	// экземпляр, что и у userService — второго читателя identities заводить
+	// незачем.
+	trainingService := training.NewTrainingService(psqlTrainingRepo, psqlRecurringRepo, outboxRepo, psqlIdentityRepo)
+	trainingHandler := training.NewTrainingHandler(trainingService)
 
 	psqlBookingRepo := booking.NewPostgresBookingRepository(pool)
 	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo, psqlIdentityRepo)
 	bookingHandler := booking.NewBookingHandler(bookingService)
-
-	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
-	recurringService := training.NewRecurringService(psqlRecurringRepo, psqlTrainingRepo)
-
-	trainingHandler := training.NewTrainingHandler(trainingService, recurringService)
 
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
@@ -196,7 +197,7 @@ func main() {
 	// звать чаще, чем реально нужно — лишний тик просто ничего не делает.
 	go func() {
 		generate := func() {
-			if err := recurringService.GenerateOccurrences(context.Background()); err != nil {
+			if err := trainingService.GenerateOccurrences(context.Background()); err != nil {
 				log.Printf("recurring trainings: generate occurrences: %v", err)
 			}
 		}
@@ -236,7 +237,7 @@ func main() {
 	// Продьюсер теперь используется только релеем аутбокса ниже — сервисы
 	// сами в Kafka больше не ходят, только пишут в outbox (см. platform/outbox).
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
-		"OnCreateTraining", "OnUpdateTraining", "OnNewUser")
+		"OnCreateTraining", "OnUpdateTraining", "OnNewUser", "OnUserApprovalChanged")
 	defer kafkaProducer.Close()
 
 	// Outbox-релей: периодически вычитывает ещё не опубликованные записи

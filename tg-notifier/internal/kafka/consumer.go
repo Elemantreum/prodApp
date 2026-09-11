@@ -20,6 +20,14 @@ func Consume[T any](ctx context.Context, brokers []string, groupID, topic string
 		Brokers: brokers,
 		Topic:   topic,
 		GroupID: groupID,
+		// На холодном старте стека этот процесс обычно поднимается раньше,
+		// чем backend успевает опубликовать первое событие и тем самым
+		// (при KAFKA_AUTO_CREATE_TOPICS_ENABLE) создать топик — reader
+		// вступает в группу, когда топика ещё нет, и без этого флага
+		// kafka-go так и не перебалансируется, когда топик появляется
+		// позже: партиция навсегда остаётся неназначенной ни одному
+		// участнику группы, сообщения молча копятся непрочитанными.
+		WatchPartitionChanges: true,
 	})
 	defer reader.Close()
 

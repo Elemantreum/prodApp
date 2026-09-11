@@ -8,6 +8,6 @@ import "context"
 // telegram/vk chat id и текст. Кто уведомляется и почему — решает тот, кто
 // публикует сообщение в Kafka (см. backend/internal/platform/kafka).
 type Notifier interface {
-	Notify(ctx context.Context, chatId int, msg string) error
-	NotifyMany(ctx context.Context, chatId []int, msg string) error
+	Notify(ctx context.Context, chatId int64, msg string) error
+	NotifyMany(ctx context.Context, chatId []int64, msg string) error
 }

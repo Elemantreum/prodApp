@@ -48,23 +48,39 @@ type RecurringTraining struct {
 // outbox (см. platform/outbox — топик = имя типа события, "OnCreateTraining"/
 // "OnUpdateTraining") вместо прямого похода в Kafka, так запись переживёт
 // краткий даунтайм Kafka и не потеряется. Отдельный релей (main.go)
-// вычитывает outbox и публикует. Внешние сервисы (tg-notifier и
-// потенциально другие — например будущий сервис логирования) сами решают,
-// что делать с фактом "что произошло" — здесь нет решения "кого уведомлять
-// и как", это уже дело подписчика.
+// вычитывает outbox и публикует.
+//
+// ChatIds — telegram chat id адресатов, зарезолвленные ЗДЕСЬ (см.
+// TrainingService.publishCreateEvent/ChatIdResolver), а не в tg-notifier —
+// так у tg-notifier не остаётся причин иметь свой доступ к Postgres, только
+// Kafka + Telegram Bot API. Кто именно попадает в список — решение этого
+// сервиса; что с ним дальше делать (текст сообщения и т.п.) — дело
+// подписчика.
 type OnCreateTraining struct {
 	TrainingId  int
 	Description string
 	Date        time.Time
 	MaxQuantity int
 	Duration    time.Duration
+	ChatIds     []int64
 }
 
+// OnUpdateTraining несёт и новое, и старое значение каждого поля — чтобы
+// подписчик (tg-notifier) мог показать не просто новое состояние, а именно
+// diff ("время: 18:00 → 19:00"). Само сравнение и форматирование текста —
+// дело подписчика, здесь только факты.
 type OnUpdateTraining struct {
-	TrainingId  int
-	Description string
-	Date        time.Time
-	MaxQuantity int
-	Duration    time.Duration
-	IsActive    bool
+	TrainingId int
+	ChatIds    []int64
+
+	Description    string
+	OldDescription string
+	Date           time.Time
+	OldDate        time.Time
+	MaxQuantity    int
+	OldMaxQuantity int
+	Duration       time.Duration
+	OldDuration    time.Duration
+	IsActive       bool
+	OldIsActive    bool
 }

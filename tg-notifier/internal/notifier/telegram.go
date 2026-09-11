@@ -23,7 +23,7 @@ func NewTelegramNotifier(telegramBotToken string) *TelegramNotifier {
 	}
 }
 
-func (t *TelegramNotifier) NotifyMany(ctx context.Context, chatId []int, msg string) error {
+func (t *TelegramNotifier) NotifyMany(ctx context.Context, chatId []int64, msg string) error {
 	for _, id := range chatId {
 		_, err := t.client.SendMessage(tg.ChatID(id), msg).Do(ctx)
 		if err != nil {
@@ -34,7 +34,7 @@ func (t *TelegramNotifier) NotifyMany(ctx context.Context, chatId []int, msg str
 	return nil
 }
 
-func (t *TelegramNotifier) Notify(ctx context.Context, chatId int, msg string) error {
+func (t *TelegramNotifier) Notify(ctx context.Context, chatId int64, msg string) error {
 	_, err := t.client.SendMessage(tg.ChatID(chatId), msg).Do(ctx)
 
 	return err

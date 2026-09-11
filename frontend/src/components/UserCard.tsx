@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import type { User } from "../api/types";
 import { Button } from "./Button";
+import { ContactLinks } from "./ContactLinks";
 
 const PLATFORM_LABEL: Record<string, string> = {
   telegram: "Telegram",
@@ -67,6 +68,7 @@ export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleA
       <div className="user-card__info">
         <div className="card__title">
           {displayName} {isSelf && <span className="user-card__you">(вы)</span>}
+          <ContactLinks identities={user.identities} />
         </div>
         <div className="card__meta">
           Платформы:{" "}

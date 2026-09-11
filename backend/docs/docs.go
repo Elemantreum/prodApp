@@ -2201,6 +2201,9 @@ const docTemplate = `{
                 },
                 "provider": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },

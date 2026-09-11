@@ -27,11 +27,13 @@ type profileRequest struct {
 	LastName  string `json:"lastName"`
 }
 
-// identityInfo — то, что видно про привязанную платформу: сама платформа и
-// внешний ID на ней. Никаких внутренних полей Identity (id записи и т.п.).
+// identityInfo — то, что видно про привязанную платформу: платформа,
+// внешний ID и @-хендл (нужен фронту для ссылки t.me/<username>, см.
+// ContactLinks). Никаких внутренних полей Identity (id записи и т.п.).
 type identityInfo struct {
 	Provider   string `json:"provider"`
 	ExternalId string `json:"externalId"`
+	Username   string `json:"username"`
 }
 
 // userWithIdentities — User плюс список всех привязанных платформ (после
@@ -112,7 +114,7 @@ func (h *UserHandler) GetOwnProfile(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *u, Identities: infos})
@@ -145,7 +147,7 @@ func (h *UserHandler) GetOwnIdentities(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, infos)
@@ -202,7 +204,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
@@ -239,7 +241,7 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 		infos := make([]identityInfo, 0, len(identities))
 		for _, id := range identities {
-			infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+			infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 		}
 
 		result = append(result, userWithIdentities{User: u, Identities: infos})
@@ -286,7 +288,7 @@ func (h *UserHandler) GetUserById(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *u, Identities: infos})
@@ -338,7 +340,7 @@ func (h *UserHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
@@ -390,7 +392,7 @@ func (h *UserHandler) UnapproveUser(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
@@ -443,7 +445,7 @@ func (h *UserHandler) MakeAdmin(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})
@@ -509,7 +511,7 @@ func (h *UserHandler) RemoveAdmin(w http.ResponseWriter, r *http.Request) {
 
 	infos := make([]identityInfo, 0, len(identities))
 	for _, id := range identities {
-		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId})
+		infos = append(infos, identityInfo{Provider: id.Provider, ExternalId: id.ExternalId, Username: id.Username})
 	}
 
 	http2.RespondJSON(w, http.StatusOK, userWithIdentities{User: *updated, Identities: infos})

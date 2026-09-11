@@ -2195,6 +2195,9 @@
                 },
                 "provider": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },

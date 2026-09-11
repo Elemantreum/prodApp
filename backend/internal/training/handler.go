@@ -12,8 +12,7 @@ import (
 )
 
 type TrainingHandler struct {
-	TrainingService  *TrainingService
-	RecurringService *RecurringService
+	TrainingService *TrainingService
 }
 
 type createTrainingRequest struct {
@@ -54,8 +53,8 @@ type updateRecurringTrainingRequest struct {
 	IsActive    bool          `json:"isActive"`
 }
 
-func NewTrainingHandler(trainingService *TrainingService, recurringService *RecurringService) *TrainingHandler {
-	return &TrainingHandler{TrainingService: trainingService, RecurringService: recurringService}
+func NewTrainingHandler(trainingService *TrainingService) *TrainingHandler {
+	return &TrainingHandler{TrainingService: trainingService}
 }
 
 // CreateTraining godoc
@@ -181,7 +180,7 @@ func (h *TrainingHandler) CreateRecurringTraining(w http.ResponseWriter, r *http
 		return
 	}
 
-	saved, err := h.RecurringService.CreateRule(r.Context(), req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime)
+	saved, err := h.TrainingService.CreateRule(r.Context(), req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -204,7 +203,7 @@ func (h *TrainingHandler) CreateRecurringTraining(w http.ResponseWriter, r *http
 // @Failure      500  {object}  map[string]string  "внутренняя ошибка сервера"
 // @Router       /trainings/recurring/get [get]
 func (h *TrainingHandler) GetRecurringTrainings(w http.ResponseWriter, r *http.Request) {
-	rules, err := h.RecurringService.ListRules(r.Context())
+	rules, err := h.TrainingService.ListRules(r.Context())
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -237,7 +236,7 @@ func (h *TrainingHandler) UpdateRecurringTraining(w http.ResponseWriter, r *http
 		return
 	}
 
-	updated, err := h.RecurringService.UpdateRule(r.Context(), req.Id, req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime, req.IsActive)
+	updated, err := h.TrainingService.UpdateRule(r.Context(), req.Id, req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime, req.IsActive)
 
 	if err != nil {
 		http2.RespondError(w, err)

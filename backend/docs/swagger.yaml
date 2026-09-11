@@ -253,6 +253,8 @@ definitions:
         type: string
       provider:
         type: string
+      username:
+        type: string
     type: object
   user.linkCodeResponse:
     properties:

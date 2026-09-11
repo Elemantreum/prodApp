@@ -161,19 +161,31 @@ func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, er
 // UNIQUE(recurring_training_id, date) — делает генерацию идемпотентной:
 // повторный проход GenerateOccurrences по тому же правилу и той же дате
 // просто ничего не делает вместо дублирования строки.
-func (p *PostgresTrainingRepository) CreateFromOccurrence(ctx context.Context, recurringId int, description string, date time.Time, maxQuantity int, duration time.Duration) error {
-	_, err := p.pool.Exec(ctx,
+// CreateFromOccurrence — nil, nil (не ошибка), если ON CONFLICT DO NOTHING
+// сработал (occurrence на эту дату уже была создана раньше, повторный
+// проход GenerateOccurrences — норма). RETURNING на INSERT с DO NOTHING не
+// возвращает строк именно в этом случае — отличаем его от реальной ошибки
+// через pgx.ErrNoRows.
+func (p *PostgresTrainingRepository) CreateFromOccurrence(ctx context.Context, recurringId int, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
+	row := p.pool.QueryRow(ctx,
 		`INSERT INTO trainings (description, date, max_quantity, duration_ns, recurring_training_id)
 		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (recurring_training_id, date) DO NOTHING`,
+		 ON CONFLICT (recurring_training_id, date) DO NOTHING
+		 RETURNING id, description, date, max_quantity, duration_ns, is_active, created_at`,
 		description, date, maxQuantity, duration, recurringId,
 	)
 
+	var tr Training
+	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
-		return fmt.Errorf("error inserting recurring occurrence: %w", err)
+		return nil, fmt.Errorf("error inserting recurring occurrence: %w", err)
 	}
 
-	return nil
+	tr.BookedCount = 0
+	return &tr, nil
 }
 
 type PostgresRecurringTrainingRepository struct {

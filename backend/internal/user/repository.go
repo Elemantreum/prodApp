@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"prodApp/internal/platform/apperrors"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -132,6 +133,56 @@ func (r *PostgresIdentityRepository) UpdateUsername(ctx context.Context, provide
 		return fmt.Errorf("update identity username: %w", err)
 	}
 	return nil
+}
+
+// AllTelegramChatIds — telegram chat id вообще всех, у кого он привязан,
+// независимо от approve/admin статуса. Реализует training.ChatIdResolver:
+// training-сервис кладёт результат прямо в payload события
+// (OnCreateTraining/OnUpdateTraining), чтобы tg-notifier мог разослать
+// уведомления без собственного доступа к Postgres — см. пакет outbox.
+func (r *PostgresIdentityRepository) AllTelegramChatIds(ctx context.Context) ([]int64, error) {
+	return r.queryTelegramChatIds(ctx, `SELECT external_id FROM user_identities WHERE provider = 'telegram'`)
+}
+
+// AdminTelegramChatIds — только у кого is_admin = true. Используется для
+// OnNewUser — уведомить админов о регистрации нового пользователя без
+// доступа tg-notifier к Postgres.
+func (r *PostgresIdentityRepository) AdminTelegramChatIds(ctx context.Context) ([]int64, error) {
+	return r.queryTelegramChatIds(ctx, `
+		SELECT ui.external_id
+		FROM user_identities ui
+		JOIN users u ON u.id = ui.user_id
+		WHERE ui.provider = 'telegram' AND u.is_admin = true`)
+}
+
+func (r *PostgresIdentityRepository) queryTelegramChatIds(ctx context.Context, sql string) ([]int64, error) {
+	rows, err := r.pool.Query(ctx, sql)
+	if err != nil {
+		return nil, fmt.Errorf("query telegram chat ids: %w", err)
+	}
+	defer rows.Close()
+
+	chatIds := make([]int64, 0)
+	for rows.Next() {
+		var externalId string
+		if err := rows.Scan(&externalId); err != nil {
+			return nil, fmt.Errorf("scan chat id: %w", err)
+		}
+
+		id, err := strconv.ParseInt(externalId, 10, 64)
+		if err != nil {
+			// Не должно случаться для telegram (external_id там всегда
+			// числовой), но лучше пропустить кривую запись, чем уронить всю
+			// рассылку остальным.
+			continue
+		}
+		chatIds = append(chatIds, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat ids: %w", err)
+	}
+
+	return chatIds, nil
 }
 
 type PostgresUserRepository struct {

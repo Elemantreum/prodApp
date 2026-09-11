@@ -70,11 +70,12 @@ services:
     environment:
       HTTP_PROXY: http://vpn-client:1080
       HTTPS_PROXY: http://vpn-client:1080
-      NO_PROXY: localhost,127.0.0.1,backend,postgres,kafka
+      NO_PROXY: localhost,127.0.0.1,backend,kafka
+    # Postgres больше не нужен — chat id для рассылки приезжают прямо в
+    # payload события (см. tg-notifier/internal/events), сервису достаточно
+    # Kafka + Telegram Bot API.
     depends_on:
       backend:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
       kafka:
         condition: service_started
