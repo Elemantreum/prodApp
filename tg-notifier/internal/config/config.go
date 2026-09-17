@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-// Config — больше нет доступа к Postgres: получатели (chat id) приезжают
-// прямо в payload событий (см. internal/events), сервису достаточно Kafka +
-// Telegram Bot API.
 type Config struct {
 	KafkaBrokers       []string
 	KafkaConsumerGroup string

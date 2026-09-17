@@ -128,7 +128,7 @@ func (p *PostgresTrainingRepository) FindById(ctx context.Context, id int) (*Tra
 }
 
 func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, error) {
-	rows, err := p.pool.Query(ctx, selectTrainingsWithBookedCount+" GROUP BY t.id ORDER BY t.id")
+	rows, err := p.pool.Query(ctx, selectTrainingsWithBookedCount+" GROUP BY t.id ORDER BY t.id DESC")
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting trainings: %w", err)
@@ -242,7 +242,7 @@ func (p *PostgresRecurringTrainingRepository) Update(ctx context.Context, id int
 
 func (p *PostgresRecurringTrainingRepository) GetAll(ctx context.Context) ([]RecurringTraining, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings ORDER BY id")
+		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings ORDER BY id DESC")
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting recurring trainings: %w", err)
@@ -272,7 +272,7 @@ func (p *PostgresRecurringTrainingRepository) GetAll(ctx context.Context) ([]Rec
 
 func (p *PostgresRecurringTrainingRepository) FindActive(ctx context.Context) ([]RecurringTraining, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings WHERE is_active = TRUE ORDER BY id")
+		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings WHERE is_active = TRUE ORDER BY id DESC")
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting active recurring trainings: %w", err)

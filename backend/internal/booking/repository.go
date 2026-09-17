@@ -83,7 +83,7 @@ func (p *PostgresBookingRepository) FindById(ctx context.Context, id int) (*Book
 
 func (p *PostgresBookingRepository) FindByUserId(ctx context.Context, userId int) ([]Booking, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, user_id, training_id, status, booking_date, unbooking_date FROM bookings WHERE user_id = $1", userId)
+		"SELECT id, user_id, training_id, status, booking_date, unbooking_date FROM bookings WHERE user_id = $1 ORDER BY id DESC", userId)
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting bookings: %w", err)
@@ -147,7 +147,7 @@ func (p *PostgresBookingRepository) FindByTrainingId(ctx context.Context, traini
 // них есть GetParticipants/FindByTrainingId.
 func (p *PostgresBookingRepository) FindAllByTrainingId(ctx context.Context, trainingId int) ([]Booking, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, user_id, training_id, status, booking_date, unbooking_date FROM bookings WHERE training_id = $1 ORDER BY booking_date", trainingId)
+		"SELECT id, user_id, training_id, status, booking_date, unbooking_date FROM bookings WHERE training_id = $1 ORDER BY booking_date DESC", trainingId)
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting bookings: %w", err)

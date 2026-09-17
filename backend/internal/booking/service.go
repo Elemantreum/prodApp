@@ -70,6 +70,10 @@ func (service *BookingService) CreateBooking(ctx context.Context, userId int, tr
 		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "тренировка уже прошла"}
 	}
 
+	if tr.BookedCount >= tr.MaxQuantity {
+		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "нет свободных мест"}
+	}
+
 	var booking Booking = Booking{UserId: userId, TrainingId: trainingId}
 
 	saved, err := service.bookRepo.Create(ctx, &booking)
