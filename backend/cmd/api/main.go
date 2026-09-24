@@ -146,6 +146,7 @@ func main() {
 			r.Route("/booking", func(r chi.Router) {
 				r.Get("/getByUserId", bookingHandler.GetBookingsByUserId)
 				r.Get("/getByTrainingId", bookingHandler.GetParticipants)
+				r.Get("/antiLeaderboard", bookingHandler.GetAntiLeaderboard)
 				r.Post("/signUp", bookingHandler.SignupForTraining)
 				r.Post("/cancel", bookingHandler.CancelBooking)
 				r.Group(func(r chi.Router) {

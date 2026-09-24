@@ -70,6 +70,15 @@ export interface BookingDetail {
   identities: Identity[];
 }
 
+export interface SinnerStats {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  lateCancellations: number;
+  noShows: number;
+  penaltyPoints: number;
+}
+
 export interface CreateTrainingInput {
   description: string;
   /** ISO 8601 timestamp */

@@ -204,3 +204,53 @@ func (p *PostgresBookingRepository) GetAll(ctx context.Context) ([]Booking, erro
 
 	return bookings, nil
 }
+
+func (p *PostgresBookingRepository) GetAntiLeaderboard(ctx context.Context) ([]SinnerStats, error) {
+	rows, err := p.pool.Query(ctx, `
+		WITH stats AS (
+			SELECT
+				u.id AS user_id,
+				u.first_name,
+				u.last_name,
+				COUNT(*) FILTER (
+					WHERE b.status = 'cancelled'
+					  AND b.unbooking_date IS NOT NULL
+					  AND b.unbooking_date < t.date
+					  AND t.date - b.unbooking_date < INTERVAL '2 hours'
+					  AND NOT EXISTS (
+						SELECT 1 FROM bookings b2
+						WHERE b2.user_id = b.user_id
+						  AND b2.training_id = b.training_id
+						  AND b2.booking_date > b.unbooking_date
+					  )
+				) AS late_cancellations,
+				COUNT(*) FILTER (WHERE b.status = 'not_completed') AS no_shows
+			FROM bookings b
+			JOIN trainings t ON t.id = b.training_id
+			JOIN users u ON u.id = b.user_id
+			GROUP BY u.id, u.first_name, u.last_name
+		)
+		SELECT user_id, first_name, last_name, late_cancellations, no_shows,
+		       late_cancellations * 1 + no_shows * 2 AS penalty_points
+		FROM stats
+		WHERE late_cancellations > 0 OR no_shows > 0
+		ORDER BY penalty_points DESC, no_shows DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("error querying anti leaderboard: %w", err)
+	}
+	defer rows.Close()
+
+	sinners := make([]SinnerStats, 0)
+	for rows.Next() {
+		var s SinnerStats
+		if err := rows.Scan(&s.UserId, &s.FirstName, &s.LastName, &s.LateCancellations, &s.NoShows, &s.PenaltyPoints); err != nil {
+			return nil, fmt.Errorf("error scanning anti leaderboard row: %w", err)
+		}
+		sinners = append(sinners, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating anti leaderboard: %w", err)
+	}
+
+	return sinners, nil
+}

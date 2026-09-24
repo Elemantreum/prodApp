@@ -7,6 +7,7 @@ import type {
   LinkCode,
   Participant,
   RecurringTraining,
+  SinnerStats,
   Training,
   User,
 } from "./types";
@@ -220,6 +221,10 @@ export const api = {
 
   getTrainingParticipants(trainingId: number): Promise<Participant[]> {
     return request<Participant[] | null>(`/booking/getByTrainingId?trainingId=${trainingId}`).then((r) => r ?? []);
+  },
+
+  getAntiLeaderboard(): Promise<SinnerStats[]> {
+    return request<SinnerStats[] | null>("/booking/antiLeaderboard").then((r) => r ?? []);
   },
 
   /** Все записи на тренировку, включая отменённые — только для админа.

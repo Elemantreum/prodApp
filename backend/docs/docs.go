@@ -302,6 +302,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/booking/antiLeaderboard": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Доступно любому авторизованному пользователю. Штрафные баллы: +1 за отмену записи меньше чем за 2 часа до тренировки, +2 за неявку.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "booking"
+                ],
+                "summary": "Список грешников",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/booking.SinnerStats"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "не авторизован",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/booking/cancel": {
             "post": {
                 "security": [
@@ -1962,6 +2008,29 @@ const docTemplate = `{
                 },
                 "lastName": {
                     "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "booking.SinnerStats": {
+            "type": "object",
+            "properties": {
+                "firstName": {
+                    "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "lateCancellations": {
+                    "type": "integer"
+                },
+                "noShows": {
+                    "type": "integer"
+                },
+                "penaltyPoints": {
+                    "type": "integer"
                 },
                 "userId": {
                     "type": "integer"

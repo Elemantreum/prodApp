@@ -134,6 +134,27 @@ func (handler *BookingHandler) GetParticipants(w http.ResponseWriter, r *http.Re
 	http2.RespondJSON(w, http.StatusOK, participants)
 }
 
+// GetAntiLeaderboard godoc
+// @Summary      Список грешников
+// @Description  Доступно любому авторизованному пользователю. Штрафные баллы: +1 за отмену записи меньше чем за 2 часа до тренировки, +2 за неявку.
+// @Tags         booking
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   SinnerStats
+// @Failure      401  {object}  map[string]string  "не авторизован"
+// @Failure      500  {object}  map[string]string  "внутренняя ошибка сервера"
+// @Router       /booking/antiLeaderboard [get]
+func (handler *BookingHandler) GetAntiLeaderboard(w http.ResponseWriter, r *http.Request) {
+	sinners, err := handler.BookingService.GetAntiLeaderboard(r.Context())
+
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+
+	http2.RespondJSON(w, http.StatusOK, sinners)
+}
+
 // GetTrainingBookings godoc
 // @Summary      Все записи на тренировку (админ)
 // @Description  Только для админов. В отличие от getByTrainingId — включает отменённые записи и id брони.

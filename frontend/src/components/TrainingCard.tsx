@@ -39,6 +39,7 @@ export function TrainingCard({
 }: Props) {
   const { claims } = useAuth();
   const isPast = new Date(training.date).getTime() < Date.now();
+  const isFull = training.bookedCount >= training.maxQuantity;
   const [expanded, setExpanded] = useState(false);
   const [participants, setParticipants] = useState<Participant[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,11 +93,11 @@ export function TrainingCard({
         ) : (
           <Button
             variant="primary"
-            disabled={isPast}
+            disabled={isPast || isFull}
             loading={signingUp}
             onClick={() => onSignUp(training.id)}
           >
-            {isPast ? "Тренировка прошла" : "Записаться"}
+            {isPast ? "Тренировка прошла" : isFull ? "Нет мест" : "Записаться"}
           </Button>
         )}
       </div>

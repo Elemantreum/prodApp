@@ -5,6 +5,7 @@ import { LoginGate } from "./pages/LoginGate";
 import { RegistrationGate } from "./pages/RegistrationGate";
 import { TrainingsPage } from "./pages/TrainingsPage";
 import { MyBookingsPage } from "./pages/MyBookingsPage";
+import { SinnersPage } from "./pages/SinnersPage";
 import { AdminLayout } from "./pages/AdminLayout";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminCreateTrainingPage } from "./pages/AdminCreateTrainingPage";
@@ -25,6 +26,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<TrainingsPage />} />
               <Route path="/bookings" element={<MyBookingsPage />} />
+              <Route path="/sinners" element={<SinnersPage />} />
               <Route path="/account" element={<AccountPage />} />
               <Route
                 path="/admin"

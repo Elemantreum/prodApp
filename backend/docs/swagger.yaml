@@ -75,6 +75,21 @@ definitions:
       userId:
         type: integer
     type: object
+  booking.SinnerStats:
+    properties:
+      firstName:
+        type: string
+      lastName:
+        type: string
+      lateCancellations:
+        type: integer
+      noShows:
+        type: integer
+      penaltyPoints:
+        type: integer
+      userId:
+        type: integer
+    type: object
   booking.cancelBookingRequest:
     properties:
       bookingId:
@@ -504,6 +519,36 @@ paths:
       - BearerAuth: []
       - OAuth2AccessCode: []
       summary: Все записи на тренировку (админ)
+      tags:
+      - booking
+  /booking/antiLeaderboard:
+    get:
+      description: 'Доступно любому авторизованному пользователю. Штрафные баллы:
+        +1 за отмену записи меньше чем за 2 часа до тренировки, +2 за неявку.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/booking.SinnerStats'
+            type: array
+        "401":
+          description: не авторизован
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Список грешников
       tags:
       - booking
   /booking/cancel:

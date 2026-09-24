@@ -18,6 +18,13 @@ const ICONS = {
       <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   ),
+  sinners: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <circle cx="12" cy="9" r="5" stroke="currentColor" strokeWidth="2" />
+      <path d="M9.5 8h.01M14.5 8h.01M9 12c1 1 4 1 5 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 13.5L5 21M16 13.5l3 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
   account: (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
       <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="2" />
@@ -38,6 +45,10 @@ export function TabBar() {
       <NavLink to="/bookings" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
         {ICONS.bookings}
         <span>Мои записи</span>
+      </NavLink>
+      <NavLink to="/sinners" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
+        {ICONS.sinners}
+        <span>Грешники</span>
       </NavLink>
       {claims?.is_admin && (
         <NavLink to="/admin" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>

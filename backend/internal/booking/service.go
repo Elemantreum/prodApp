@@ -19,6 +19,7 @@ type BookingRepository interface {
 	FindByTrainingId(ctx context.Context, trainingId int) ([]Booking, error)
 	FindAllByTrainingId(ctx context.Context, trainingId int) ([]Booking, error)
 	GetAll(ctx context.Context) ([]Booking, error)
+	GetAntiLeaderboard(ctx context.Context) ([]SinnerStats, error)
 }
 
 type BookingService struct {
@@ -216,6 +217,16 @@ func (service *BookingService) HasBookings(ctx context.Context, userId int) (boo
 	}
 
 	return len(bookings) > 0, nil
+}
+
+func (service *BookingService) GetAntiLeaderboard(ctx context.Context) ([]SinnerStats, error) {
+	sinners, err := service.bookRepo.GetAntiLeaderboard(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("error getting anti leaderboard: %w", err)
+	}
+
+	return sinners, nil
 }
 
 func (service *BookingService) GetAllBookingsByUserId(ctx context.Context, userId int, requester *http2.Claims) ([]Booking, error) {

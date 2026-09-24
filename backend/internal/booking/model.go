@@ -48,3 +48,12 @@ type BookingDetail struct {
 	BookingDate time.Time       `json:"bookingDate"`
 	Identities  []user.Identity `json:"identities"`
 }
+
+type SinnerStats struct {
+	UserId            int    `json:"userId"`
+	FirstName         string `json:"firstName"`
+	LastName          string `json:"lastName"`
+	LateCancellations int    `json:"lateCancellations"`
+	NoShows           int    `json:"noShows"`
+	PenaltyPoints     int    `json:"penaltyPoints"`
+}
