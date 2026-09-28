@@ -16,17 +16,9 @@ type TrainingRepository interface {
 	Delete(ctx context.Context, id int) error
 	FindById(ctx context.Context, id int) (*Training, error)
 	GetAll(ctx context.Context) ([]Training, error)
-	// CreateFromOccurrence — nil, nil (не ошибка), если строка уже
-	// существует (ON CONFLICT DO NOTHING поверх UNIQUE(recurring_training_id,
-	// date) — идемпотентность повторных проходов GenerateOccurrences, см.
-	// generateForRule). Именно поэтому не просто error — вызывающему нужно
-	// отличить "ничего не создали" от "создали", чтобы не публиковать
-	// OnCreateTraining на пустом месте.
+
 	CreateFromOccurrence(ctx context.Context, recurringId int, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error)
-	// HasBookings — прямой SQL-запрос к таблице bookings (без импорта пакета
-	// booking — он уже импортирует training, обратная зависимость была бы
-	// циклом). Используется, чтобы не дать снести тренировку, на которую уже
-	// есть история записей/посещаемости — см. DeleteTraining.
+
 	HasBookings(ctx context.Context, trainingId int) (bool, error)
 	DeactivatePast(ctx context.Context) error
 }
@@ -38,25 +30,10 @@ type RecurringTrainingRepository interface {
 	FindActive(ctx context.Context) ([]RecurringTraining, error)
 }
 
-// ChatIdResolver — узкий порт наружу в user-пакет (реализован
-// *user.PostgresIdentityRepository — структурная типизация, отдельного
-// импорта user отсюда не требуется). Нужен ровно один метод: "дай telegram
-// chat id всех, кому интересны тренировки" — результат кладётся прямо в
-// payload события (OnCreateTraining/OnUpdateTraining), чтобы tg-notifier
-// мог разослать уведомления без собственного доступа к Postgres.
 type ChatIdResolver interface {
 	AllTelegramChatIds(ctx context.Context) ([]int64, error)
 }
 
-// TrainingService — CRUD обычных тренировок И управление регулярными
-// правилами разом (было двумя сервисами, RecurringService слит сюда):
-// генерация occurrences — это просто ещё один способ создать Training,
-// который должен проходить через тот же путь публикации OnCreateTraining,
-// что и AddTraining, — раньше это было не так (generateForRule дёргал
-// репозиторий напрямую), из-за чего уведомление не приходило на
-// автоматически сгенерированные регулярные занятия. Один сервис — один
-// путь создания (createAndPublish), в котором эта логика гарантированно
-// не разъедется снова.
 type TrainingService struct {
 	repo          TrainingRepository
 	recurringRepo RecurringTrainingRepository
@@ -96,16 +73,10 @@ func (s *TrainingService) AddTraining(ctx context.Context, description string, d
 	return saved, nil
 }
 
-// publishCreateEvent — единственное место, откуда уходит OnCreateTraining:
-// и обычное ручное создание (AddTraining), и автогенерация occurrences
-// регулярного правила (generateForRule) идут через него, поэтому
-// уведомление гарантированно приходит на ЛЮБОЕ создание тренировки, а не
-// только на ручное.
 func (s *TrainingService) publishCreateEvent(ctx context.Context, t *Training) {
 	chatIds, err := s.chatIds.AllTelegramChatIds(ctx)
 	if err != nil {
-		// Не фейлим создание тренировки из-за этого — просто разошлём
-		// событие без адресатов, tg-notifier никого не уведомит в этот раз.
+
 		log.Printf("resolve chat ids: %v", err)
 	}
 
@@ -118,11 +89,6 @@ func (s *TrainingService) publishCreateEvent(ctx context.Context, t *Training) {
 		ChatIds:     chatIds,
 	}
 
-	// Сбой записи в outbox не должен проваливать уже состоявшееся создание
-	// тренировки — тренировка реально создана, клиенту это нужно увидеть как
-	// успех. Пока Create не в одной транзакции с repo.Create (см. пакет
-	// outbox), возможна нестыковка "тренировка есть, события нет" — это
-	// осознанно оставлено на потом.
 	if err := outbox.Create(ctx, s.outbox, event); err != nil {
 		log.Printf("outbox: %v", err)
 	}
@@ -145,8 +111,6 @@ func (s *TrainingService) UpdateTraining(ctx context.Context, id int, descriptio
 		return nil, fmt.Errorf("duration can't be less or equal than 0")
 	}
 
-	// Снимок ДО изменения — нужен, чтобы событие несло diff, а не просто
-	// новое состояние (см. OnUpdateTraining).
 	before, err := s.repo.FindById(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("finding training before update: %w", err)
@@ -201,10 +165,6 @@ func (s *TrainingService) FindById(ctx context.Context, id int) (*Training, erro
 	return training, nil
 }
 
-// GetAll возвращает все тренировки админу и только активные — всем
-// остальным. requester может быть nil (на всякий случай, если middleware
-// почему-то не положил claims в контекст) — тогда, как и для любого
-// обычного пользователя, неактивные тренировки не отдаются.
 func (s *TrainingService) GetAll(ctx context.Context, requester *http2.Claims) ([]Training, error) {
 	trainings, err := s.repo.GetAll(ctx)
 
@@ -226,13 +186,6 @@ func (s *TrainingService) GetAll(ctx context.Context, requester *http2.Claims) (
 	return active, nil
 }
 
-// DeleteTraining удаляет тренировку насовсем. Отказывает, если на неё есть
-// хоть одна бронь (активная, отменённая, отмеченная посещаемостью — любая):
-// это уже история, каскадное удаление через FK молча снесло бы её вместе с
-// тренировкой. Деактивация (UpdateTraining с isActive=false) — правильный
-// способ "убрать" тренировку с сохранением истории; Delete — только для
-// пустых, ничего не значащих записей (опечатка, лишнее регулярное занятие
-// и т.п.).
 func (s *TrainingService) DeleteTraining(ctx context.Context, id int) error {
 	hasBookings, err := s.repo.HasBookings(ctx, id)
 
@@ -254,12 +207,6 @@ func (s *TrainingService) DeleteTraining(ctx context.Context, id int) error {
 	return nil
 }
 
-// DeactivatePastTrainings — вызывается периодически фоновым тикером (см.
-// main.go): переводит прошедшие тренировки в isActive=false, чтобы они сами
-// переставали быть видны обычным пользователям (см. GetAll), без ручного
-// вмешательства админа. Booking.CreateBooking всё равно дополнительно
-// проверяет дату напрямую — на случай гонки в окне между тем, как
-// тренировка прошла, и следующим тиком этого метода.
 func (s *TrainingService) DeactivatePastTrainings(ctx context.Context) error {
 	if err := s.repo.DeactivatePast(ctx); err != nil {
 		return fmt.Errorf("deactivating past trainings: %w", err)
@@ -298,15 +245,6 @@ func (service *TrainingService) ListRules(ctx context.Context) ([]RecurringTrain
 	return rules, nil
 }
 
-// UpdateRule меняет все поля правила разом, включая isActive — так
-// включение/выключение регулярности и правка остальных полей (даты первого
-// занятия, мест, длительности, времени создания) идут через одну и ту же
-// ручку, а не отдельный toggle. Уже созданные тренировки не трогает — они
-// остаются обычными строками в trainings, которые админ может отдельно
-// отредактировать/деактивировать через обычный UpdateTraining. Если правило
-// снова активно и изменения открыли новые "созревшие" occurrences (например
-// сдвинули anchorDate назад или увеличили leadTime), они материализуются
-// сразу же, не дожидаясь фонового тика.
 func (service *TrainingService) UpdateRule(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool) (*RecurringTraining, error) {
 	if err := validateRule(description, anchorDate, maxQuantity, duration, leadTime); err != nil {
 		return nil, err
@@ -351,12 +289,6 @@ func validateRule(description string, anchorDate time.Time, maxQuantity int, dur
 	return nil
 }
 
-// GenerateOccurrences — идемпотентный проход по всем активным правилам:
-// досоздаёт недостающие занятия, чьё окно создания уже наступило (см.
-// generateForRule и поле LeadTime). Вызывается и по расписанию (см.
-// main.go), и сразу при создании/изменении правила. Безопасно звать сколько
-// угодно раз — INSERT ... ON CONFLICT DO NOTHING на стороне репозитория
-// гарантирует отсутствие дублей.
 func (service *TrainingService) GenerateOccurrences(ctx context.Context) error {
 	rules, err := service.recurringRepo.FindActive(ctx)
 
@@ -373,18 +305,6 @@ func (service *TrainingService) GenerateOccurrences(ctx context.Context) error {
 	return nil
 }
 
-// generateForRule материализует все occurrences правила, чьё "окно
-// создания" уже открылось — то есть occurrence.Sub(now) <= rule.LeadTime.
-// Occurrences идут по возрастанию с фиксированным недельным шагом, так что
-// как только встретили ещё не созревший — все следующие тем более не
-// созрели, можно останавливаться. Отстающих (например после простоя
-// сервера) это тоже само подхватывает: цикл просто стартует от anchor и
-// создаёт всё, что уже пора, сколько бы occurrences ни накопилось.
-//
-// Каждая реально созданная (неno-op, см. CreateFromOccurrence) occurrence
-// идёт через тот же publishCreateEvent, что и ручное AddTraining — именно
-// это чинит "уведомление не приходит на регулярные тренировки", ради чего
-// RecurringService и слит в TrainingService.
 func (service *TrainingService) generateForRule(ctx context.Context, rule *RecurringTraining) error {
 	now := time.Now()
 

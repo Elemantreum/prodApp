@@ -22,9 +22,7 @@ interface AuthContextValue {
   claims: JwtClaims | null;
   error: string | null;
   retry: () => void;
-  /** Revokes the refresh token server-side and clears the local session. */
   logout: () => void;
-  /** Dev-only escape hatch for testing outside Telegram/VK — see LoginDevPanel. */
   loginWithToken: (token: string) => void;
 }
 
@@ -62,10 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  /** Tries the cheap path first: exchange the stored refresh token for a
-   *  fresh pair. Returns null (and drops the dead refresh token) if there
-   *  isn't one or the server rejects it — caller falls back to a full
-   *  platform relogin (re-verifying Telegram/VK launch data) in that case. */
   const tryRefresh = useCallback(async (): Promise<AuthResponse | null> => {
     const stored = localStorage.getItem(REFRESH_STORAGE_KEY);
     if (!stored) return null;
@@ -77,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Platform SDK bootstrap + theme wiring. Runs once.
   useEffect(() => {
     if (platform === "telegram") {
       const tg = getTelegramWebApp();
@@ -104,9 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (platform === "vk") {
-      initVk().catch(() => {
-        /* VKWebAppInit failing shouldn't block the app from rendering */
-      });
+      initVk().catch(() => {});
       applyTheme(LIGHT_THEME);
       return subscribeVkTheme((scheme) => applyTheme(scheme === "dark" ? DARK_THEME : LIGHT_THEME));
     }
@@ -115,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return undefined;
   }, [platform]);
 
-  // Auth bootstrap: reuse a cached, still-valid token; otherwise log in fresh.
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
@@ -136,8 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Access token is gone/expired — the refresh token (30-day TTL) very
-      // likely still isn't, so try that before bothering Telegram/VK again.
       const refreshed = await tryRefresh();
       if (refreshed) {
         if (!cancelled) applyTokens(refreshed);
@@ -167,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform, attempt]);
 
-  // Let the API client silently mint a fresh token when one expires mid-session.
   useEffect(() => {
     setUnauthorizedHandler(async () => {
       const refreshed = await tryRefresh();
@@ -201,9 +188,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError("Некорректный токен");
       return;
     }
-    // Dev-only escape hatch (see LoginDevPanel) — a bare access token pasted
-    // by hand has no matching refresh token, so silent renewal falls back to
-    // a real platform relogin once this one expires.
     localStorage.setItem(STORAGE_KEY, raw);
     localStorage.removeItem(REFRESH_STORAGE_KEY);
     setAuthToken(raw);
@@ -220,7 +204,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setToken(null);
     setClaims(null);
-    // Best-effort — the local session is already cleared either way.
     if (stored) api.logout(stored).catch(() => {});
     setAttempt((n) => n + 1);
   }, []);

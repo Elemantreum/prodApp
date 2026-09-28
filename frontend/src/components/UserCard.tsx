@@ -22,9 +22,6 @@ interface Props {
 export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleAdmin, onDelete, onRename }: Props) {
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Без имени";
 
-  // window.confirm() is unreliable inside Telegram/VK webviews (silently
-  // no-ops or throws in a lot of client versions) — a plain click-twice
-  // confirm built into the UI works everywhere instead.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const [editing, setEditing] = useState(false);

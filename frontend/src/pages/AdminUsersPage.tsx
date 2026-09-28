@@ -55,9 +55,6 @@ export function AdminUsersPage() {
   }
 
   function handleDelete(user: User) {
-    // UserCard already asks for a second click before calling this — удаление
-    // отменит все брони юзера, но повторный native window.confirm() здесь не
-    // нужен (и не работает надёжно в Telegram/VK webview).
     runAction(user, "delete", () => api.deleteUser(user.id));
   }
 

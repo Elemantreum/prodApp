@@ -23,9 +23,6 @@ interface Props {
   onDeleted: (id: number) => void;
 }
 
-/** Всплывающее окно администратора на карточке тренировки: редактирование
- *  самой тренировки сверху, отметка посещаемости по каждой записи, удаление
- *  снизу. Открывается только для админов (см. TrainingCard). */
 export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: Props) {
   const [description, setDescription] = useState(training.description);
   const [date, setDate] = useState(isoToLocalDateTimeInput(training.date));
@@ -40,8 +37,6 @@ export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: 
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<number | null>(null);
 
-  // window.confirm() ненадёжен внутри Telegram/VK webview — двухшаговое
-  // подтверждение прямо в UI работает везде (см. UserCard).
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -93,8 +88,6 @@ export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: 
       await api.deleteTraining(training.id);
       onDeleted(training.id);
     } catch (e) {
-      // 409 здесь означает конкретно "на тренировку есть записи" — бэк уже
-      // формулирует это по-человечески (см. TrainingService.DeleteTraining).
       setDeleteError(e instanceof ApiError ? e.message : "Не удалось удалить");
       setConfirmingDelete(false);
     } finally {

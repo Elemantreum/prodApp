@@ -37,7 +37,6 @@ func (p *PostgresTrainingRepository) Create(ctx context.Context, description str
 		return nil, fmt.Errorf("error inserting training: %w", err)
 	}
 
-	// Свежесозданная тренировка ещё не могла обрасти бронями — запрос не нужен.
 	tr.BookedCount = 0
 
 	return &tr, nil
@@ -74,10 +73,6 @@ func (p *PostgresTrainingRepository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-// DeactivatePast переводит в isActive=false все тренировки, чья дата уже
-// наступила. Вызывается периодически фоновым тикером (см. main.go) — так
-// прошедшие тренировки сами перестают быть видны обычным пользователям
-// (см. TrainingService.GetAll) без ручного вмешательства админа.
 func (p *PostgresTrainingRepository) DeactivatePast(ctx context.Context) error {
 	_, err := p.pool.Exec(ctx, "UPDATE trainings SET is_active = FALSE WHERE date < now() AND is_active = TRUE")
 
@@ -88,10 +83,6 @@ func (p *PostgresTrainingRepository) DeactivatePast(ctx context.Context) error {
 	return nil
 }
 
-// HasBookings — прямой запрос к таблице bookings, минуя пакет booking (он
-// уже импортирует training, обратная зависимость была бы циклом). Нужен
-// TrainingService.DeleteTraining, чтобы не дать снести тренировку, на
-// которую есть история записей.
 func (p *PostgresTrainingRepository) HasBookings(ctx context.Context, trainingId int) (bool, error) {
 	var exists bool
 	err := p.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM bookings WHERE training_id = $1)", trainingId).Scan(&exists)
@@ -103,10 +94,6 @@ func (p *PostgresTrainingRepository) HasBookings(ctx context.Context, trainingId
 	return exists, nil
 }
 
-// selectTrainingsWithBookedCount джойнит bookings прямо в SQL, чтобы отдать
-// карточкам на фронте счётчик "сколько записано" без лишнего запроса на
-// каждую тренировку. LEFT JOIN + FILTER — так тренировки без единой брони
-// тоже попадают в выборку, с booked_count = 0.
 const selectTrainingsWithBookedCount = `
 	SELECT t.id, t.description, t.date, t.max_quantity, t.duration_ns, t.is_active, t.created_at, t.recurring_training_id,
 	       COUNT(b.id) FILTER (WHERE b.status = 'active') AS booked_count
@@ -156,16 +143,6 @@ func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, er
 	return trainings, nil
 }
 
-// CreateFromOccurrence вставляет тренировку, сгенерированную правилом
-// регулярности, на конкретную дату. ON CONFLICT DO NOTHING поверх
-// UNIQUE(recurring_training_id, date) — делает генерацию идемпотентной:
-// повторный проход GenerateOccurrences по тому же правилу и той же дате
-// просто ничего не делает вместо дублирования строки.
-// CreateFromOccurrence — nil, nil (не ошибка), если ON CONFLICT DO NOTHING
-// сработал (occurrence на эту дату уже была создана раньше, повторный
-// проход GenerateOccurrences — норма). RETURNING на INSERT с DO NOTHING не
-// возвращает строк именно в этом случае — отличаем его от реальной ошибки
-// через pgx.ErrNoRows.
 func (p *PostgresTrainingRepository) CreateFromOccurrence(ctx context.Context, recurringId int, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
 	row := p.pool.QueryRow(ctx,
 		`INSERT INTO trainings (description, date, max_quantity, duration_ns, recurring_training_id)

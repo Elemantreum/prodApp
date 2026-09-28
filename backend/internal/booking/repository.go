@@ -141,10 +141,6 @@ func (p *PostgresBookingRepository) FindByTrainingId(ctx context.Context, traini
 	return bookings, nil
 }
 
-// FindAllByTrainingId — то же самое, что FindByTrainingId, но без фильтра по
-// статусу. Нужно только для админской ручки "все записи на тренировку"
-// (включая отменённые) — обычным пользователям такое видеть незачем, для
-// них есть GetParticipants/FindByTrainingId.
 func (p *PostgresBookingRepository) FindAllByTrainingId(ctx context.Context, trainingId int) ([]Booking, error) {
 	rows, err := p.pool.Query(ctx,
 		"SELECT id, user_id, training_id, status, booking_date, unbooking_date FROM bookings WHERE training_id = $1 ORDER BY booking_date DESC", trainingId)

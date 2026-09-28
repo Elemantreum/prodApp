@@ -34,15 +34,10 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// Каждое событие — свой топик, свой consumer-луп, своя интерпретация
-	// "что написать". "Кому" уже решено бэкендом и приехало прямо в payload
-	// события (ChatIds/ChatId) — этому сервису не нужен свой доступ к
-	// Postgres, только Kafka + Telegram Bot API. Транспортная часть (чтение,
-	// JSON) — общая (см. kafka.Consume), бизнес-логика — только тут.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnCreateTraining",
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup,
 			func(ctx context.Context, e events.OnCreateTraining) {
 				text := fmt.Sprintf("Новая тренировка! %s в %s", e.Description, e.Date.In(moscowTZ).Format("15:04 02.01"))
 				if err := tgNotifier.NotifyMany(ctx, e.ChatIds, text); err != nil {
@@ -54,7 +49,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnUpdateTraining",
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup,
 			func(ctx context.Context, e events.OnUpdateTraining) {
 				text := formatTrainingUpdate(e)
 				if err := tgNotifier.NotifyMany(ctx, e.ChatIds, text); err != nil {
@@ -66,7 +61,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnNewUser",
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup,
 			func(ctx context.Context, e events.OnNewUser) {
 				name := e.FirstName
 				if e.LastName != "" {
@@ -82,7 +77,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, "OnUserApprovalChanged",
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup,
 			func(ctx context.Context, e events.OnUserApprovalChanged) {
 				text := "🎉 Тебя одобрили! Теперь можно записываться на тренировки."
 				if !e.Approved {
@@ -98,9 +93,6 @@ func main() {
 	log.Printf("tg-notifier: shutting down")
 }
 
-// formatTrainingUpdate строит сообщение по diff'у из события: если что-то
-// реально поменялось — перечисляет что именно ("время: 18:00 → 19:00"),
-// вместо простого "теперь X" без контекста, что было раньше.
 func formatTrainingUpdate(e events.OnUpdateTraining) string {
 	var changes []string
 

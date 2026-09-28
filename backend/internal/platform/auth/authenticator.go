@@ -52,7 +52,6 @@ func (a *TelegramAuthenticator) Verify(initData string) (*Principal, error) {
 	}
 	values.Del("hash")
 
-	// 1. Собираем data-check-string: отсортированные "key=value" через \n
 	keys := make([]string, 0, len(values))
 	for k := range values {
 		keys = append(keys, k)
@@ -65,22 +64,18 @@ func (a *TelegramAuthenticator) Verify(initData string) (*Principal, error) {
 	}
 	dataCheckString := strings.Join(pairs, "\n")
 
-	// 2. secret_key = HMAC-SHA256(key="WebAppData", data=botToken)
 	secretMAC := hmac.New(sha256.New, []byte("WebAppData"))
 	secretMAC.Write([]byte(a.botToken))
 	secretKey := secretMAC.Sum(nil)
 
-	// 3. computed_hash = HMAC-SHA256(key=secret_key, data=dataCheckString)
 	h := hmac.New(sha256.New, secretKey)
 	h.Write([]byte(dataCheckString))
 	computedHash := hex.EncodeToString(h.Sum(nil))
 
-	// 4. Сравнение — обязательно через hmac.Equal (constant-time), не через ==
 	if !hmac.Equal([]byte(computedHash), []byte(receivedHash)) {
 		return nil, errors.New("telegram: invalid hash, possibly forged initData")
 	}
 
-	// 5. Защита от replay — данные не должны быть слишком старыми
 	authDateStr := values.Get("auth_date")
 	authDateUnix, err := strconv.ParseInt(authDateStr, 10, 64)
 	if err != nil {
@@ -91,7 +86,6 @@ func (a *TelegramAuthenticator) Verify(initData string) (*Principal, error) {
 		return nil, errors.New("telegram: initData expired")
 	}
 
-	// 6. Парсим сами данные о пользователе (JSON внутри query-параметра user)
 	userJSON := values.Get("user")
 	if userJSON == "" {
 		return nil, errors.New("telegram: missing user data")
@@ -135,7 +129,6 @@ func (a *VKAuthenticator) Verify(rawQuery string) (*Principal, error) {
 		return nil, errors.New("vk: missing sign")
 	}
 
-	// 1. Только параметры с префиксом vk_
 	keys := make([]string, 0)
 	for k := range values {
 		if strings.HasPrefix(k, "vk_") {
@@ -144,21 +137,17 @@ func (a *VKAuthenticator) Verify(rawQuery string) (*Principal, error) {
 	}
 	sort.Strings(keys)
 
-	// 2-3. Сортировка + склейка в query-подобную строку
 	pairs := make([]string, 0, len(keys))
 	for _, k := range keys {
 		pairs = append(pairs, k+"="+values.Get(k))
 	}
 	dataCheckString := strings.Join(pairs, "&")
 
-	// 4. HMAC-SHA256 с секретным ключом приложения
 	h := hmac.New(sha256.New, []byte(a.secretKey))
 	h.Write([]byte(dataCheckString))
 
-	// 5. base64 URL-safe БЕЗ padding — так требует VK
 	computedSign := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 
-	// 6. Сравнение constant-time
 	if !hmac.Equal([]byte(computedSign), []byte(receivedSign)) {
 		return nil, errors.New("vk: invalid sign, possibly forged launch params")
 	}

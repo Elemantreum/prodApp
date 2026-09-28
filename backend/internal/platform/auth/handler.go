@@ -152,9 +152,6 @@ func (h *AuthHandler) issueAndRespond(w http.ResponseWriter, r *http.Request, pr
 	h.issueTokenPairAndRespond(w, r, appUser)
 }
 
-// issueTokenPairAndRespond — общий финальный шаг для всех "входных" ручек
-// (login/link): выпускает и короткоживущий access token, и долгоживущий
-// refresh token, и отдаёт пару клиенту.
 func (h *AuthHandler) issueTokenPairAndRespond(w http.ResponseWriter, r *http.Request, appUser *user.User) {
 	access, err := h.tokenIssuer.IssueAccessToken(appUser.Id, appUser.IsAdmin, appUser.IsApproved)
 	if err != nil {
@@ -199,15 +196,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отзываем предъявленный токен сразу — ротация, см. RefreshTokenRepository.Revoke.
 	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
 		http2.RespondError(w, err)
 		return
 	}
 
-	// Перечитываем пользователя из БД, а не доверяем ничему из старого
-	// токена — is_admin/is_approved могли поменяться с момента логина, и
-	// новый access token должен нести уже актуальные значения.
 	appUser, err := h.userService.GetUser(r.Context(), userID)
 	if err != nil {
 		http2.RespondError(w, err)
@@ -231,8 +224,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отзыв невалидного/чужого/уже отозванного токена — не ошибка,
-	// идемпотентно: клиент в любом случае забывает токен у себя.
 	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
 		http2.RespondError(w, err)
 		return

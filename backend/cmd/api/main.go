@@ -28,16 +28,6 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-// @title           ProdApp API
-// @version         1.0
-// @description     Бэкенд для бронирования тренировок
-// @host            localhost:8080
-// @BasePath        /api/v1
-
-// @securityDefinitions.apikey  BearerAuth
-// @in                          header
-// @name                        Authorization
-// @description                 Введите токен в формате: Bearer {token}
 func main() {
 	log.Printf("start main")
 
@@ -72,10 +62,7 @@ func main() {
 
 	psqlTrainingRepo := training.NewPostgresTrainingRepository(pool)
 	psqlRecurringRepo := training.NewPostgresRecurringTrainingRepository(pool)
-	// psqlIdentityRepo реализует training.ChatIdResolver (структурная
-	// типизация — метод AllTelegramChatIds есть, этого достаточно), тот же
-	// экземпляр, что и у userService — второго читателя identities заводить
-	// незачем.
+
 	trainingService := training.NewTrainingService(psqlTrainingRepo, psqlRecurringRepo, outboxRepo, psqlIdentityRepo)
 	trainingHandler := training.NewTrainingHandler(trainingService)
 
@@ -191,11 +178,6 @@ func main() {
 		}
 	}()
 
-	// Регулярные тренировки материализуются, а не считаются на лету: каждое
-	// сгенерированное занятие — обычная строка в trainings, на которую можно
-	// записаться/отредактировать/отметить посещаемость как на любую другую.
-	// Идемпотентно (ON CONFLICT DO NOTHING в репозитории), так что не страшно
-	// звать чаще, чем реально нужно — лишний тик просто ничего не делает.
 	go func() {
 		generate := func() {
 			if err := trainingService.GenerateOccurrences(context.Background()); err != nil {
@@ -203,7 +185,7 @@ func main() {
 			}
 		}
 
-		generate() // сразу при старте — не ждать первого тика после деплоя
+		generate()
 
 		ticker := time.NewTicker(6 * time.Hour)
 		defer ticker.Stop()
@@ -212,13 +194,6 @@ func main() {
 		}
 	}()
 
-	// Прошедшие тренировки сами становятся неактивными — не показываются
-	// обычным пользователям (см. TrainingService.GetAll), но остаются
-	// доступны админу как история. Тикаем часто (не 6 часов, как у
-	// регулярных тренировок) — иначе тренировка ещё долго после начала
-	// выглядела бы как открытая для записи в списке. CreateBooking всё равно
-	// не полагается только на этот тикер — проверяет дату сам, так что окно
-	// между тиками ничем не рискует, только визуально.
 	go func() {
 		deactivate := func() {
 			if err := trainingService.DeactivatePastTrainings(context.Background()); err != nil {
@@ -235,17 +210,10 @@ func main() {
 		}
 	}()
 
-	// Продьюсер теперь используется только релеем аутбокса ниже — сервисы
-	// сами в Kafka больше не ходят, только пишут в outbox (см. platform/outbox).
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
 		"OnCreateTraining", "OnUpdateTraining", "OnNewUser", "OnUserApprovalChanged")
 	defer kafkaProducer.Close()
 
-	// Outbox-релей: периодически вычитывает ещё не опубликованные записи
-	// (см. platform/outbox) и шлёт их в Kafka как есть — payload там уже
-	// сериализован сервисом, который его туда положил, релей его не трогает.
-	// Тикаем часто — цель в том, чтобы задержка между "событие записано" и
-	// "событие в Kafka" была небольшой, а не в том, чтобы экономить нагрузку.
 	go func() {
 		dispatch := func() {
 			entries, err := outboxRepo.FindUnpublished(context.Background(), 100)

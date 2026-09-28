@@ -3,16 +3,11 @@ interface Props {
   max: number;
 }
 
-// Зелёный (свободно) -> жёлтый -> красный (мест почти/совсем нет), по
-// заполненности. HSL-хью линейно едет от 140 (зелёный) к 0 (красный).
 function occupancyColor(ratio: number): string {
   const hue = 140 - 140 * Math.min(ratio, 1);
   return `hsl(${hue}, 70%, 45%)`;
 }
 
-/** Сегментированная полоса заполненности тренировки: сегментов ровно
- *  max (сколько мест всего), закрашено — booked. Цвет всех закрашенных
- *  сегментов общий, зависит от общей заполненности. */
 export function OccupancyBar({ booked, max }: Props) {
   const safeMax = Math.max(max, 1);
   const ratio = Math.min(booked / safeMax, 1);

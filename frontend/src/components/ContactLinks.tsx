@@ -1,9 +1,6 @@
 import type { Identity } from "../api/types";
 import { CONTACT_LABEL, contactUrl } from "../utils/contacts";
 
-/** Маленькие ссылки-чипы на VK/Telegram участника — рядом с именем в списках
- *  "Кто записан" и посещаемости. Если у идентичности нет рабочей ссылки
- *  (Telegram без @username) — просто не рендерим чип для неё. */
 export function ContactLinks({ identities }: { identities: Identity[] }) {
   const links = identities
     .map((identity) => ({ identity, url: contactUrl(identity) }))

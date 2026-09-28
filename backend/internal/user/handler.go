@@ -19,25 +19,18 @@ type userIdRequest struct {
 	UserId int `json:"userId"`
 }
 
-// profileRequest — UserId 0 (или отсутствует) значит "себя". Не-админ может
-// прислать только 0/свой собственный id — проверяется в UserService.UpdateProfile.
 type profileRequest struct {
 	UserId    int    `json:"userId"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 }
 
-// identityInfo — то, что видно про привязанную платформу: платформа,
-// внешний ID и @-хендл (нужен фронту для ссылки t.me/<username>, см.
-// ContactLinks). Никаких внутренних полей Identity (id записи и т.п.).
 type identityInfo struct {
 	Provider   string `json:"provider"`
 	ExternalId string `json:"externalId"`
 	Username   string `json:"username"`
 }
 
-// userWithIdentities — User плюс список всех привязанных платформ (после
-// ResolveAndLink их может быть больше одной).
 type userWithIdentities struct {
 	User
 	Identities []identityInfo `json:"identities"`

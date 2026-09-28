@@ -27,7 +27,26 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  kafka-init:
+    build:
+      context: kafka-init/
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
   kafka-ui:
     image: kafbat/kafka-ui:latest
     ports:
@@ -57,7 +76,9 @@ services:
       postgres:
         condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
   tg-notifier:
     build:
       context: tg-notifier/
@@ -71,14 +92,13 @@ services:
       HTTP_PROXY: http://vpn-client:1080
       HTTPS_PROXY: http://vpn-client:1080
       NO_PROXY: localhost,127.0.0.1,backend,kafka
-    # Postgres больше не нужен — chat id для рассылки приезжают прямо в
-    # payload события (см. tg-notifier/internal/events), сервису достаточно
-    # Kafka + Telegram Bot API.
     depends_on:
       backend:
         condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
   frontend:
     build:
       context: frontend/
@@ -92,6 +112,7 @@ services:
         condition: service_healthy
 volumes:
   postgres_data:
+  kafka_data:
 
 networks:
   vpn-network:

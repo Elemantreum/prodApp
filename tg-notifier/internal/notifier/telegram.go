@@ -7,12 +7,6 @@ import (
 	"github.com/mr-linch/go-tg"
 )
 
-// TelegramNotifier — перенесён как есть из backend/internal/notifier
-// (см. историю бэкенда): раньше жил в монолите и резолвил получателей сам
-// через *user.UserService (NotifyAll/NotifyAdmins). Теперь резолв "кому"
-// целиком на стороне бэкенда (он публикует уже готовый список chat id в
-// Kafka) — этот сервис только шлёт, никакой зависимости от user/booking
-// пакетов и, соответственно, от Postgres здесь больше нет.
 type TelegramNotifier struct {
 	client *tg.Client
 }

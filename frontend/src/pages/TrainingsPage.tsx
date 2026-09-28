@@ -41,14 +41,10 @@ export function TrainingsPage() {
     try {
       const booking = await api.signUp(trainingId);
       setMyBookings((prev) => [...prev, booking]);
-      // Оптимистично подвинуть счётчик на карточке, не дожидаясь рефетча.
       setTrainings((prev) =>
         prev ? prev.map((t) => (t.id === trainingId ? { ...t, bookedCount: t.bookedCount + 1 } : t)) : prev,
       );
     } catch (e) {
-      // 403 здесь может означать только одно: CreateBooking на бэке отказывает
-      // только по причине "не одобрен админом" — так что подменяем сырой
-      // "forbidden: ..." с сервера на понятный текст, а не показываем как есть.
       if (e instanceof ApiError && e.status === 403) {
         setError("Вы не одобрены администратором. Дождитесь подтверждения, чтобы записываться на тренировки.");
       } else {
@@ -66,7 +62,6 @@ export function TrainingsPage() {
       const cancelled = myBookings.find((b) => b.id === bookingId);
       await api.cancelBooking(bookingId);
       setMyBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled" } : b)));
-      // Оптимистично подвинуть счётчик на карточке, не дожидаясь рефетча.
       if (cancelled) {
         setTrainings((prev) =>
           prev
@@ -101,8 +96,6 @@ export function TrainingsPage() {
 
       {trainings && trainings.length > 0 && (
         <div className="list">
-          {/* Неактивные тренировки бэк отдаёт только админу (см. TrainingService.GetAll) —
-              обычным пользователям не видны, фильтровать на фронте не нужно. */}
           {trainings.map((t) => {
             const myBookingId = activeBookingIdByTrainingId.get(t.id);
             return (

@@ -8,7 +8,7 @@ import (
 )
 
 var fb *apperrors.ForbiddenError
-var nf apperrors.NotFoundError
+var nf *apperrors.NotFoundError
 var vd *apperrors.ValidationError
 var ua *apperrors.UnauthorizedError
 var ce *apperrors.ConflictError

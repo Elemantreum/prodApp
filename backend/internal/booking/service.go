@@ -41,10 +41,6 @@ func (service *BookingService) CreateBooking(ctx context.Context, userId int, tr
 		return nil, fmt.Errorf("error getting user: %w", err)
 	}
 
-	// Одобрение — не декоративное поле: пока админ не одобрил юзера, тот не
-	// может записываться на тренировки. Проверяем по свежим данным из БД, а
-	// не по claims из JWT — иначе одобрение админом не сработает мгновенно,
-	// а только после того как у юзера обновится токен (до 15 минут).
 	if !u.IsApproved {
 		return nil, &apperrors.ForbiddenError{Reason: "аккаунт ещё не одобрен администратором"}
 	}
@@ -55,18 +51,10 @@ func (service *BookingService) CreateBooking(ctx context.Context, userId int, tr
 		return nil, fmt.Errorf("training with id %v not found: %w", trainingId, err)
 	}
 
-	// Неактивная тренировка (в том числе автоматически деактивированная как
-	// прошедшая — см. TrainingService.DeactivatePastTrainings) не показывается
-	// обычным пользователям в списке, но проверяем и здесь на случай гонки
-	// (тренировка стала неактивной между тем как список загрузился и юзер
-	// нажал "Записаться") или прямого запроса по известному id.
 	if !tr.IsActive {
 		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "тренировка неактивна"}
 	}
 
-	// Дата — источник истины сам по себе, а не только через IsActive: если
-	// админ по какой-то причине держит прошедшую тренировку активной, всё
-	// равно нельзя записаться на то, что уже случилось.
 	if tr.Date.Before(time.Now()) {
 		return nil, &apperrors.ConflictError{Resource: fmt.Sprintf("training %d", trainingId), Reason: "тренировка уже прошла"}
 	}
@@ -86,9 +74,6 @@ func (service *BookingService) CreateBooking(ctx context.Context, userId int, tr
 	return saved, nil
 }
 
-// GetParticipants — кто сейчас записан на тренировку. Доступно любому
-// авторизованному пользователю (не только админам) — это публичный список
-// внутри приложения, а не приватные данные конкретного юзера.
 func (service *BookingService) GetParticipants(ctx context.Context, trainingId int) ([]Participant, error) {
 	_, err := service.trainingRepo.FindById(ctx, trainingId)
 
@@ -129,10 +114,6 @@ func (service *BookingService) GetParticipants(ctx context.Context, trainingId i
 	return participants, nil
 }
 
-// GetTrainingBookings — админский список ВСЕХ записей на тренировку,
-// включая отменённые (для истории и разбора спорных ситуаций). Роут закрыт
-// RequireAdmin на уровне роутера, поэтому claims здесь не нужны — так же,
-// как и в остальных admin-only методах (ApproveUser и т.п.).
 func (service *BookingService) GetTrainingBookings(ctx context.Context, trainingId int) ([]BookingDetail, error) {
 	_, err := service.trainingRepo.FindById(ctx, trainingId)
 
@@ -175,10 +156,6 @@ func (service *BookingService) GetTrainingBookings(ctx context.Context, training
 	return details, nil
 }
 
-// SetAttendance — отметка админом "пришёл/не пришёл" по факту прошедшей
-// (или любой другой) тренировки. Отменённую бронь трогать нельзя — человек
-// сам отказался, отмечать за него посещение бессмысленно и вводит в
-// заблуждение статистику.
 func (service *BookingService) SetAttendance(ctx context.Context, bookingId int, attended bool) (*Booking, error) {
 	b, err := service.bookRepo.FindById(ctx, bookingId)
 
@@ -205,10 +182,6 @@ func (service *BookingService) SetAttendance(ctx context.Context, bookingId int,
 	return b, nil
 }
 
-// HasBookings — используется user.UserService при чистке осиротевших после
-// привязки аккаунтов (см. ResolveAndLink): удалять такой аккаунт безопасно
-// только если у него нет ни одной брони, иначе каскадное удаление молча
-// снесёт историю.
 func (service *BookingService) HasBookings(ctx context.Context, userId int) (bool, error) {
 	bookings, err := service.bookRepo.FindByUserId(ctx, userId)
 

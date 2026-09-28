@@ -14,16 +14,10 @@ interface Props {
   training: Training;
   onSignUp: (id: number) => void;
   signingUp: boolean;
-  /** Id активной брони текущего юзера на эту тренировку, если есть —
-   *  определяет режим кнопки: "Записаться" vs "Отписаться". */
   myBookingId?: number;
   onCancel: (bookingId: number) => void;
   cancelling: boolean;
-  /** Опционально — только если родитель хочет получать актуальную
-   *  тренировку после того, как админ отредактирует её в модалке. */
   onTrainingUpdated?: (training: Training) => void;
-  /** Опционально — только если родитель хочет убрать карточку из списка
-   *  после того, как админ удалит тренировку в модалке. */
   onTrainingDeleted?: (id: number) => void;
 }
 
@@ -54,7 +48,7 @@ export function TrainingCard({
 
     setExpanded(true);
 
-    if (participants !== null) return; // уже загружали — не дёргаем API повторно
+    if (participants !== null) return;
 
     setLoading(true);
     setError(null);
@@ -79,8 +73,6 @@ export function TrainingCard({
               </span>
             )}
           </div>
-          {/* Бэк отдаёт неактивные тренировки только админу (см. TrainingsPage) —
-              значит если она тут и isActive=false, показывать её видит только он. */}
           {!training.isActive && <span className="badge badge--cancelled">Неактивна, скрыта от пользователей</span>}
           <div className="card__meta">{formatDateTime(training.date)}</div>
           <div className="card__meta">{formatDurationNs(training.duration)}</div>

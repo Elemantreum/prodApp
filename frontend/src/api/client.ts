@@ -26,17 +26,10 @@ export class ApiError extends Error {
 
 let authToken: string | null = null;
 
-/** Called by AuthContext once the login flow resolves (or on logout, with null). */
 export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
-/**
- * Registered by AuthContext. When a request comes back 401 (expired/invalid
- * token), the client asks this to mint a fresh one from the still-valid
- * platform launch data (Telegram initData / VK launch params) and retries
- * the request exactly once — the user never sees a "please log in again".
- */
 let unauthorizedHandler: (() => Promise<string | null>) | null = null;
 
 export function setUnauthorizedHandler(handler: (() => Promise<string | null>) | null): void {
@@ -47,19 +40,10 @@ async function parseErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.clone().json()) as { error?: string };
     if (body?.error) return body.error;
-  } catch {
-    // body wasn't JSON — fall through to statusText
-  }
+  } catch {}
   return res.statusText || `HTTP ${res.status}`;
 }
 
-/**
- * `skipAuthRetry` is set for the two /auth/* calls themselves: a 401 there
- * means "the platform signature is invalid", not "the token expired", so
- * feeding it back into unauthorizedHandler (which just calls the very same
- * login function again) would recurse forever, hammering the backend with
- * an unbounded retry loop instead of surfacing a real error.
- */
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -90,7 +74,6 @@ async function request<T>(
 }
 
 export const api = {
-  /** initData is the raw, signed string Telegram gives the mini app. */
   authTelegram(initData: string): Promise<AuthResponse> {
     return request<AuthResponse>(
       "/auth/telegram",
@@ -99,21 +82,14 @@ export const api = {
     );
   },
 
-  /** rawQuery is the VK launch params querystring (with `sign`), unmodified. */
   authVk(rawQuery: string): Promise<AuthResponse> {
     return request<AuthResponse>(`/auth/vk?${rawQuery}`, { method: "POST" }, { skipAuthRetry: true });
   },
 
-  /** Mints a one-time code (5 min TTL) for the *currently* logged-in account,
-   *  to be redeemed via linkTelegram/linkVk from a session on the other
-   *  platform — that's how the same person ends up as one account instead
-   *  of two separate ones. */
   generateLinkCode(): Promise<LinkCode> {
     return request<LinkCode>("/user/linkCode", { method: "POST" });
   },
 
-  /** Redeems a link code using this Telegram session's initData. Returns a
-   *  token for the account the code was generated on — NOT a new one. */
   linkTelegram(initData: string, code: string): Promise<AuthResponse> {
     return request<AuthResponse>(
       "/auth/telegram/link",
@@ -122,16 +98,11 @@ export const api = {
     );
   },
 
-  /** Redeems a link code using this VK session's launch params. */
   linkVk(rawQuery: string, code: string): Promise<AuthResponse> {
     const query = rawQuery ? `${rawQuery}&code=${encodeURIComponent(code)}` : `code=${encodeURIComponent(code)}`;
     return request<AuthResponse>(`/auth/vk/link?${query}`, { method: "POST" }, { skipAuthRetry: true });
   },
 
-  /** Exchanges a still-valid refresh token for a fresh pair (rotation — the
-   *  old refresh token is consumed server-side). `skipAuthRetry` because a
-   *  401 here means the refresh token itself is dead, not that this request
-   *  needs a retry via unauthorizedHandler (which would just call this again). */
   refreshToken(refreshToken: string): Promise<AuthResponse> {
     return request<AuthResponse>(
       "/auth/refresh",
@@ -140,8 +111,6 @@ export const api = {
     );
   },
 
-  /** Revokes a refresh token server-side (logout). Best-effort from the
-   *  caller's point of view — local storage gets cleared regardless. */
   logout(refreshToken: string): Promise<void> {
     return request<void>(
       "/auth/logout",
@@ -151,8 +120,6 @@ export const api = {
   },
 
   getTrainings(): Promise<Training[]> {
-    // Go marshals a nil slice as JSON `null`, not `[]` — always normalize to
-    // an array here so callers never have to null-check before .filter/.map.
     return request<Training[] | null>("/trainings/get").then((r) => r ?? []);
   },
 
@@ -174,8 +141,6 @@ export const api = {
     });
   },
 
-  /** Отказывает (409), если на тренировку есть хоть одна запись — сначала
-   *  нужно её деактивировать через updateTraining. */
   deleteTraining(id: number): Promise<true> {
     return request<true>("/trainings/delete", {
       method: "POST",
@@ -183,9 +148,6 @@ export const api = {
     });
   },
 
-  /** anchorDate — дата и время первого занятия; правило само материализует
-   *  его и все последующие еженедельные занятия, как только подходит
-   *  leadTime до каждой из них. */
   createRecurringTraining(input: {
     description: string;
     anchorDate: string;
@@ -203,8 +165,6 @@ export const api = {
     return request<RecurringTraining[] | null>("/trainings/recurring/get").then((r) => r ?? []);
   },
 
-  /** Правит все поля правила разом, включая isActive — им же правило и
-   *  включается, и выключается. */
   updateRecurringTraining(
     id: number,
     input: { description: string; anchorDate: string; maxQuantity: number; duration: number; leadTime: number; isActive: boolean },
@@ -227,9 +187,6 @@ export const api = {
     return request<SinnerStats[] | null>("/booking/antiLeaderboard").then((r) => r ?? []);
   },
 
-  /** Все записи на тренировку, включая отменённые — только для админа.
-   *  В отличие от getTrainingParticipants несёт id брони и статус, чтобы
-   *  тут же можно было отметить посещаемость. */
   getTrainingBookings(trainingId: number): Promise<BookingDetail[]> {
     return request<BookingDetail[] | null>(`/booking/admin/getByTrainingId?trainingId=${trainingId}`).then(
       (r) => r ?? [],
@@ -261,18 +218,14 @@ export const api = {
     return request<User[] | null>("/user/get").then((r) => r ?? []);
   },
 
-  /** My own profile — not in the JWT (that only carries user_id/is_admin/is_approved). */
   getOwnProfile(): Promise<User> {
     return request<User>("/user/me");
   },
 
-  /** All platforms linked to *my* account. */
   getOwnIdentities(): Promise<Identity[]> {
     return request<Identity[] | null>("/user/identities").then((r) => r ?? []);
   },
 
-  /** Omit userId to update your own profile. Non-admins can only target
-   *  themselves, and only while unapproved — backend enforces both. */
   updateProfile(firstName: string, lastName: string, userId?: number): Promise<User> {
     return request<User>("/user/updateProfile", {
       method: "POST",

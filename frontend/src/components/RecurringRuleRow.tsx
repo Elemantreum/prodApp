@@ -12,10 +12,6 @@ interface Props {
   onUpdated: (rule: RecurringTraining) => void;
 }
 
-/** Одна строка в списке правил регулярных тренировок: в режиме просмотра —
- *  сводка + кнопка "Изменить"; в режиме редактирования — полная форма со
- *  всеми полями правила, включая isActive (им же правило и включается, и
- *  выключается — отдельного toggle нет). */
 export function RecurringRuleRow({ rule, onUpdated }: Props) {
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(rule.description);

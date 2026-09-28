@@ -4,8 +4,6 @@ import { useAuth } from "../auth/AuthContext";
 import { Spinner } from "../components/Spinner";
 import { Button } from "../components/Button";
 
-/** Gates the whole app behind auth: shows a loading/error/unsupported screen
- *  until a token is ready, then renders `children`. */
 export function LoginGate({ children }: { children: ReactNode }) {
   const { status, error, retry, platform, loginWithToken } = useAuth();
 
@@ -29,7 +27,6 @@ export function LoginGate({ children }: { children: ReactNode }) {
     );
   }
 
-  // status === "unsupported": not inside Telegram or VK.
   return (
     <div className="gate">
       <p>Открой это приложение внутри Telegram или VK.</p>

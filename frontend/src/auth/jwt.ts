@@ -1,8 +1,3 @@
-// Mirrors backend/internal/platform/auth/issuer.go's Claims struct.
-// This is a READ-ONLY, unverified decode of the JWT payload — it's only
-// used to drive the UI (show the admin tab, know "my" userId). The actual
-// signature check happens server-side on every request; nothing here is a
-// security boundary.
 export interface JwtClaims {
   user_id: number;
   is_admin: boolean;

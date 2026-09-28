@@ -19,13 +19,10 @@ export function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso));
 }
 
-/** Converts a <input type="datetime-local"> value (local time, no offset)
- *  to a UTC ISO string the backend's time.Time can parse. */
 export function localDateTimeInputToIso(value: string): string {
   return new Date(value).toISOString();
 }
 
-/** ISO -> value suitable for <input type="datetime-local"> (local time). */
 export function isoToLocalDateTimeInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");

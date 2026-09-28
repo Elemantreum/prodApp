@@ -101,13 +101,6 @@ func (r *PostgresIdentityRepository) FindByUserID(ctx context.Context, userID in
 	return identities, nil
 }
 
-// Reassign — upsert поверх UNIQUE(provider, external_id): если такая
-// идентичность уже привязана (например, юзер открыл вторую платформу без
-// кода и она автосоздала себе отдельный аккаунт), просто переставляет её на
-// newUserID вместо отказа. Используется ТОЛЬКО во флоу погашения кода
-// привязки — там владение обеими платформенными аккаунтами уже подтверждено
-// (валидная подпись initData/launch params + код, который знает только
-// владелец исходного аккаунта).
 func (r *PostgresIdentityRepository) Reassign(ctx context.Context, provider, externalID, username string, newUserID int) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO user_identities (user_id, provider, external_id, username)
@@ -121,9 +114,6 @@ func (r *PostgresIdentityRepository) Reassign(ctx context.Context, provider, ext
 	return nil
 }
 
-// UpdateUsername обновляет @-хендл при повторном логине — в отличие от
-// имени/фамилии это не то, чем управляет юзер, а просто техническая деталь
-// для ссылок, поэтому обновляем молча на каждый вход без всякого UI.
 func (r *PostgresIdentityRepository) UpdateUsername(ctx context.Context, provider, externalID, username string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE user_identities SET username = $3 WHERE provider = $1 AND external_id = $2`,
@@ -135,18 +125,10 @@ func (r *PostgresIdentityRepository) UpdateUsername(ctx context.Context, provide
 	return nil
 }
 
-// AllTelegramChatIds — telegram chat id вообще всех, у кого он привязан,
-// независимо от approve/admin статуса. Реализует training.ChatIdResolver:
-// training-сервис кладёт результат прямо в payload события
-// (OnCreateTraining/OnUpdateTraining), чтобы tg-notifier мог разослать
-// уведомления без собственного доступа к Postgres — см. пакет outbox.
 func (r *PostgresIdentityRepository) AllTelegramChatIds(ctx context.Context) ([]int64, error) {
 	return r.queryTelegramChatIds(ctx, `SELECT external_id FROM user_identities WHERE provider = 'telegram'`)
 }
 
-// AdminTelegramChatIds — только у кого is_admin = true. Используется для
-// OnNewUser — уведомить админов о регистрации нового пользователя без
-// доступа tg-notifier к Postgres.
 func (r *PostgresIdentityRepository) AdminTelegramChatIds(ctx context.Context) ([]int64, error) {
 	return r.queryTelegramChatIds(ctx, `
 		SELECT ui.external_id
@@ -171,9 +153,7 @@ func (r *PostgresIdentityRepository) queryTelegramChatIds(ctx context.Context, s
 
 		id, err := strconv.ParseInt(externalId, 10, 64)
 		if err != nil {
-			// Не должно случаться для telegram (external_id там всегда
-			// числовой), но лучше пропустить кривую запись, чем уронить всю
-			// рассылку остальным.
+
 			continue
 		}
 		chatIds = append(chatIds, id)
@@ -323,9 +303,6 @@ func (r *PostgresLinkCodeRepository) Create(ctx context.Context, lc *LinkCode) e
 	return nil
 }
 
-// FindAndDelete забирает код и сразу удаляет его одним запросом — код
-// одноразовый, повторное использование того же кода после успешного
-// погашения (или после гонки из двух параллельных попыток) должно упасть.
 func (r *PostgresLinkCodeRepository) FindAndDelete(ctx context.Context, code string) (*LinkCode, error) {
 	var lc LinkCode
 	err := r.pool.QueryRow(ctx,
