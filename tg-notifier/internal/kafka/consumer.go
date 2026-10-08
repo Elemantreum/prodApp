@@ -18,7 +18,11 @@ func Consume[T any](ctx context.Context, brokers []string, groupID string, handl
 		Topic:   topic,
 		GroupID: groupID,
 	})
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			log.Printf("%s: close reader: %v", topic, err)
+		}
+	}()
 
 	log.Printf("tg-notifier: listening on topic %q", topic)
 
