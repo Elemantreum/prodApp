@@ -73,7 +73,7 @@ export function TrainingCard({
               </span>
             )}
           </div>
-          {!training.isActive && <span className="badge badge--cancelled">Неактивна, скрыта от пользователей</span>}
+          {!training.isActive && <span className="badge badge--cancelled">Неактивна</span>}
           <div className="card__meta">{formatDateTime(training.date)}</div>
           <div className="card__meta">{formatDurationNs(training.duration)}</div>
           <OccupancyBar booked={training.bookedCount} max={training.maxQuantity} />
