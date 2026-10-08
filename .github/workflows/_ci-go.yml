@@ -1,0 +1,45 @@
+name: _ci-go
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: Папка с go.mod, например backend
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.path }}/go.mod
+          cache-dependency-path: ${{ inputs.path }}/go.sum
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: ${{ inputs.path }}
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.path }}/go.mod
+          cache-dependency-path: ${{ inputs.path }}/go.sum
+
+      - run: go vet ./...
+
+      - run: go test -race -count=1 ./...

@@ -38,14 +38,20 @@ services:
       retries: 10
       start_period: 30s
   kafka-init:
-    build:
-      context: kafka-init/
-      dockerfile: Dockerfile
-    env_file:
-      - .env
+    image: apache/kafka:latest
     depends_on:
       kafka:
         condition: service_healthy
+    environment:
+      KAFKA_TOPICS: ${KAFKA_TOPICS}
+    entrypoint: [ "/bin/bash", "-c" ]
+    command:
+      - |
+        for topic in $${KAFKA_TOPICS//,/ }; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+            --create --if-not-exists --topic "$$topic" \
+            --partitions 1 --replication-factor 1
+        done
     restart: "no"
   kafka-ui:
     image: kafbat/kafka-ui:latest
@@ -59,9 +65,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: backend/
-      dockerfile: Dockerfile
+    image: ghcr.io/elemantreum/prodapp/backend:prod
     expose:
       - "8080"
     env_file:

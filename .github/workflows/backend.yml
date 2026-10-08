@@ -1,0 +1,72 @@
+name: backend
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+      - '.github/workflows/_ci-go.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend.yml'
+      - '.github/workflows/_ci-go.yml'
+      - '.github/workflows/_build-image.yml'
+      - '.github/workflows/_deploy.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Тег уже собранного образа для выкатки, например sha-<коммит>
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-go.yml
+    with:
+      path: backend
+
+  image:
+    if: github.event_name == 'push'
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      service: backend
+      context: backend
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: image
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      service: backend
+      version: ${{ needs.image.outputs.version }}
+    secrets: inherit
+
+  redeploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      service: backend
+      version: ${{ inputs.version }}
+    secrets: inherit
