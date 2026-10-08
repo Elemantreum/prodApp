@@ -287,6 +287,11 @@ func (h *TrainingHandler) GetTrainingById(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "id"})
+		return
+	}
+
 	trainings, err := h.TrainingService.FindById(r.Context(), id)
 
 	if err != nil {

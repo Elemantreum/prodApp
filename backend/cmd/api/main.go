@@ -212,7 +212,11 @@ func main() {
 
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
 		"OnCreateTraining", "OnUpdateTraining", "OnNewUser", "OnUserApprovalChanged")
-	defer kafkaProducer.Close()
+	defer func() {
+		if err := kafkaProducer.Close(); err != nil {
+			log.Printf("kafka producer: close: %v", err)
+		}
+	}()
 
 	go func() {
 		dispatch := func() {

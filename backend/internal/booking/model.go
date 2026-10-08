@@ -9,9 +9,9 @@ type BookingStatus string
 
 const (
 	Active       BookingStatus = "active"
-	Cancelled                  = "cancelled"
-	Completed                  = "completed"
-	NotCompleted               = "not_completed"
+	Cancelled    BookingStatus = "cancelled"
+	Completed    BookingStatus = "completed"
+	NotCompleted BookingStatus = "not_completed"
 )
 
 type Booking struct {
