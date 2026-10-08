@@ -1,0 +1,72 @@
+name: tg-notifier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tg-notifier/**'
+      - '.github/workflows/tg-notifier.yml'
+      - '.github/workflows/_ci-go.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tg-notifier/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/tg-notifier.yml'
+      - '.github/workflows/_ci-go.yml'
+      - '.github/workflows/_build-image.yml'
+      - '.github/workflows/_deploy.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Тег уже собранного образа для выкатки, например sha-<коммит>
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tg-notifier-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    if: github.event_name != 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-go.yml
+    with:
+      path: tg-notifier
+
+  image:
+    if: github.event_name == 'push'
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      service: tg-notifier
+      context: tg-notifier
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: image
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      service: tg-notifier
+      version: ${{ needs.image.outputs.version }}
+    secrets: inherit
+
+  redeploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      service: tg-notifier
+      version: ${{ inputs.version }}
+    secrets: inherit
