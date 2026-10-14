@@ -31,3 +31,5 @@ wg0.conf
 # Editor/IDE
 # .idea/
 # .vscode/
+*.override.*
+scripts/
