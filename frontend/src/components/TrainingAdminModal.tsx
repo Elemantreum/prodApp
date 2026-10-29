@@ -172,7 +172,9 @@ export function TrainingAdminModal({ training, onClose, onUpdated, onDeleted }: 
           {bookings?.length === 0 && <div className="participants__empty">Пока никто не записался</div>}
           {bookings && bookings.length > 0 && (
             <ul className="attendance-list">
-              {bookings.map((b) => {
+              {[...bookings]
+                  .sort((a, b) => (a.lastName ?? "").localeCompare(b.lastName ?? "", "ru"))
+                  .map((b) =>  {
                 const fullName = [b.firstName, b.lastName].filter(Boolean).join(" ");
                 const busy = pendingId === b.bookingId;
                 return (
