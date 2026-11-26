@@ -7,14 +7,17 @@ import (
 	"prodApp/internal/platform/apperrors"
 )
 
-var fb *apperrors.ForbiddenError
-var nf *apperrors.NotFoundError
-var vd *apperrors.ValidationError
-var ua *apperrors.UnauthorizedError
-var ce *apperrors.ConflictError
-
 func RespondError(w http.ResponseWriter, err error) {
+	var fb *apperrors.ForbiddenError
+	var nf *apperrors.NotFoundError
+	var vd *apperrors.ValidationError
+	var ua *apperrors.UnauthorizedError
+	var ce *apperrors.ConflictError
+
+	var valueNotFound apperrors.NotFoundError
 	switch {
+	case errors.As(err, &valueNotFound):
+		RespondJSON(w, http.StatusNotFound, map[string]string{"error": valueNotFound.Error()})
 	case errors.As(err, &nf):
 		RespondJSON(w, http.StatusNotFound, map[string]string{"error": nf.Error()})
 	case errors.As(err, &vd):

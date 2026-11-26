@@ -1,33 +1,42 @@
-import type { Booking, BookingStatus, Training } from "../api/types";
+import { t } from "../i18n";
 import { formatDateTime } from "../utils/date";
-import { Button } from "./Button";
+import { useOpenSession, type PersonalSession } from "../pages/personalSessions";
+import "../styles/personal.css";
 
-const STATUS_LABEL: Record<BookingStatus, string> = {
-  active: "Активна",
-  cancelled: "Отменена",
-  completed: "Завершена",
-  not_completed: "Не пройдена",
+const labels = {
+  active: t("Вы записаны"),
+  waiting: t("В листе ожидания"),
+  completed: t("Был"),
+  not_completed: t("Не был"),
+  cancelled: t("Запись отменена"),
 };
 
-interface Props {
-  booking: Booking;
-  training: Training | undefined;
-  onCancel: (id: number) => void;
-  cancelling: boolean;
-}
-
-export function BookingCard({ booking, training, onCancel, cancelling }: Props) {
+export function BookingCard({
+  session,
+  onCancel,
+  busy,
+}: {
+  session: PersonalSession;
+  onCancel?: () => void;
+  busy?: boolean;
+}) {
+  const open = useOpenSession();
   return (
-    <div className="card">
-      <div className="card__body">
-        <div className="card__title">{training?.description ?? `Тренировка #${booking.trainingId}`}</div>
-        {training && <div className="card__meta">{formatDateTime(training.date)}</div>}
-        <span className={`badge badge--${booking.status}`}>{STATUS_LABEL[booking.status]}</span>
-      </div>
-      {booking.status === "active" && (
-        <Button variant="danger" loading={cancelling} onClick={() => onCancel(booking.id)}>
-          Отменить
-        </Button>
+    <div className="row personal-session">
+      <button type="button" className="personal-session-open" onClick={() => open(session)}>
+        <span className="personal-detail">
+          <strong>{session.training.description}</strong>
+          <small>
+            {session.section.name} ·{" "}
+            <time dateTime={session.training.date}>{formatDateTime(session.training.date)}</time>
+          </small>
+        </span>
+        <span className="personal-mark">{labels[session.status]}</span>
+      </button>
+      {onCancel && (
+        <button className="btn" type="button" disabled={busy} onClick={onCancel}>
+          {session.status === "waiting" ? t("Выйти") : t("Отменить")}
+        </button>
       )}
     </div>
   );

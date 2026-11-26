@@ -1,11 +1,12 @@
-const dateTimeFormatter = new Intl.DateTimeFormat("ru-RU", {
+import { locale } from "../i18n";
+const dateTimeFormatter = new Intl.DateTimeFormat(locale, {
   day: "numeric",
   month: "long",
   hour: "2-digit",
   minute: "2-digit",
 });
 
-const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
+const dateFormatter = new Intl.DateTimeFormat(locale, {
   day: "numeric",
   month: "long",
   year: "numeric",

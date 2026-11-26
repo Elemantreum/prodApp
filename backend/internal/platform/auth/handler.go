@@ -2,31 +2,27 @@ package auth
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"prodApp/internal/platform/apperrors"
 	"strings"
+	"time"
 
 	http2 "prodApp/internal/platform/http"
-	"prodApp/internal/user"
 )
 
 type AuthHandler struct {
-	tgAuth      *TelegramAuthenticator
-	vkAuth      *VKAuthenticator
-	tokenIssuer *TokenIssuer
-	refreshRepo *RefreshTokenRepository
-	userService *user.UserService
+	tgAuth  *TelegramAuthenticator
+	vkAuth  *VKAuthenticator
+	service *AuthService
+	botName string
 }
 
-func NewAuthHandler(tgAuth *TelegramAuthenticator, vkAuth *VKAuthenticator, tokenIssuer *TokenIssuer, refreshRepo *RefreshTokenRepository, userService *user.UserService) *AuthHandler {
-	return &AuthHandler{
-		tgAuth:      tgAuth,
-		vkAuth:      vkAuth,
-		tokenIssuer: tokenIssuer,
-		refreshRepo: refreshRepo,
-		userService: userService,
-	}
+func NewAuthHandler(tgAuth *TelegramAuthenticator, vkAuth *VKAuthenticator, service *AuthService, botName string) *AuthHandler {
+	return &AuthHandler{tgAuth: tgAuth, vkAuth: vkAuth, service: service, botName: botName}
+}
+
+func (h *AuthHandler) WebsiteBot(w http.ResponseWriter, _ *http.Request) {
+	http2.RespondJSON(w, http.StatusOK, map[string]string{"bot": h.botName})
 }
 
 // TelegramLogin godoc
@@ -46,7 +42,12 @@ func (h *AuthHandler) TelegramLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.issueAndRespond(w, r, principal)
+	tokens, err := h.service.Login(r.Context(), principal)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }
 
 // VKLogin godoc
@@ -63,7 +64,12 @@ func (h *AuthHandler) VKLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.issueAndRespond(w, r, principal)
+	tokens, err := h.service.Login(r.Context(), principal)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }
 
 // TelegramLink godoc
@@ -93,7 +99,12 @@ func (h *AuthHandler) TelegramLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.linkAndRespond(w, r, principal, req.Code)
+	tokens, err := h.service.Link(r.Context(), principal, req.Code)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }
 
 // VKLink godoc
@@ -115,57 +126,16 @@ func (h *AuthHandler) VKLink(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 
-	h.linkAndRespond(w, r, principal, code)
+	tokens, err := h.service.Link(r.Context(), principal, code)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }
 
 type linkRequest struct {
 	Code string `json:"code"`
-}
-
-func (h *AuthHandler) linkAndRespond(w http.ResponseWriter, r *http.Request, principal *Principal, code string) {
-	if code == "" {
-		http2.RespondError(w, &apperrors.ValidationError{Field: "code"})
-		return
-	}
-
-	appUser, err := h.userService.ResolveAndLink(r.Context(), code, principal.Provider, principal.ExternalId, principal.Username)
-	if err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	h.issueTokenPairAndRespond(w, r, appUser)
-}
-
-type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-func (h *AuthHandler) issueAndRespond(w http.ResponseWriter, r *http.Request, principal *Principal) {
-	appUser, err := h.userService.EnsureProfile(r.Context(), principal.Provider, principal.ExternalId, principal.FirstName, principal.LastName, principal.Username)
-	if err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	h.issueTokenPairAndRespond(w, r, appUser)
-}
-
-func (h *AuthHandler) issueTokenPairAndRespond(w http.ResponseWriter, r *http.Request, appUser *user.User) {
-	access, err := h.tokenIssuer.IssueAccessToken(appUser.Id, appUser.IsAdmin, appUser.IsApproved)
-	if err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	refresh, err := h.refreshRepo.Create(r.Context(), appUser.Id, h.tokenIssuer.RefreshTokenTTL())
-	if err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	http2.RespondJSON(w, http.StatusOK, tokenResponse{AccessToken: access, RefreshToken: refresh})
 }
 
 // Refresh godoc
@@ -186,28 +156,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.refreshRepo.FindActiveUserID(r.Context(), req.RefreshToken)
-	if err != nil {
-		if errors.Is(err, ErrRefreshTokenInvalid) {
-			http2.RespondError(w, &apperrors.UnauthorizedError{})
-			return
-		}
-		http2.RespondError(w, err)
-		return
-	}
-
-	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
-		http2.RespondError(w, err)
-		return
-	}
-
-	appUser, err := h.userService.GetUser(r.Context(), userID)
+	tokens, err := h.service.Refresh(r.Context(), req.RefreshToken)
 	if err != nil {
 		http2.RespondError(w, err)
 		return
 	}
-
-	h.issueTokenPairAndRespond(w, r, appUser)
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }
 
 // Logout godoc
@@ -224,7 +178,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.refreshRepo.Revoke(r.Context(), req.RefreshToken); err != nil {
+	if err := h.service.Logout(r.Context(), req.RefreshToken); err != nil {
 		http2.RespondError(w, err)
 		return
 	}
@@ -234,4 +188,23 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
+}
+
+func (h *AuthHandler) WebsiteLogin(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	if err := r.ParseForm(); err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "telegram"})
+		return
+	}
+	principal, err := h.tgAuth.websitePrincipal(r.PostForm, time.Now())
+	if err != nil {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+	tokens, err := h.service.Login(r.Context(), principal)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, tokens)
 }

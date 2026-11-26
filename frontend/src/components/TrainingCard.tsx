@@ -1,148 +1,37 @@
-import { useState } from "react";
-import { api, ApiError } from "../api/client";
-import type { Participant, Training } from "../api/types";
-import { useAuth } from "../auth/AuthContext";
-import { formatDateTime } from "../utils/date";
-import { formatDurationNs } from "../utils/duration";
-import { Button } from "./Button";
-import { ContactLinks } from "./ContactLinks";
+import type { Training } from "../api/types";
+import { t } from "../i18n";
 import { OccupancyBar } from "./OccupancyBar";
-import { Spinner } from "./Spinner";
-import { TrainingAdminModal } from "./TrainingAdminModal";
-
-interface Props {
-  training: Training;
-  onSignUp: (id: number) => void;
-  signingUp: boolean;
-  myBookingId?: number;
-  onCancel: (bookingId: number) => void;
-  cancelling: boolean;
-  onTrainingUpdated?: (training: Training) => void;
-  onTrainingDeleted?: (id: number) => void;
-}
+import { clock } from "./scheduleDates";
 
 export function TrainingCard({
   training,
-  onSignUp,
-  signingUp,
-  myBookingId,
-  onCancel,
-  cancelling,
-  onTrainingUpdated,
-  onTrainingDeleted,
-}: Props) {
-  const { claims } = useAuth();
-  const isPast = new Date(training.date).getTime() < Date.now();
-  const isFull = training.bookedCount >= training.maxQuantity;
-  const [expanded, setExpanded] = useState(false);
-  const [participants, setParticipants] = useState<Participant[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [adminOpen, setAdminOpen] = useState(false);
-
-  async function toggleParticipants() {
-    if (expanded) {
-      setExpanded(false);
-      return;
-    }
-
-    setExpanded(true);
-
-    if (participants !== null) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      setParticipants(await api.getTrainingParticipants(training.id));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось загрузить список");
-    } finally {
-      setLoading(false);
-    }
-  }
+  onOpen,
+}: {
+  training: Training;
+  onOpen: (training: Training) => void;
+}) {
+  const start = Date.parse(training.date);
+  const status =
+    start <= Date.now()
+      ? "Занятие завершено"
+      : !training.isActive
+        ? "Неактивна"
+        : training.bookedCount >= training.maxQuantity
+          ? "Мест нет · Лист ожидания"
+          : "Есть места";
 
   return (
-    <div className="card training-card">
-      <div className="training-card__row">
-        <div className="card__body">
-          <div className="card__title">
-            {training.description}
-            {training.recurringTrainingId != null && (
-              <span className="training-card__recurring" title="Повторяется каждую неделю">
-                🔁
-              </span>
-            )}
-          </div>
-          {!training.isActive && <span className="badge badge--cancelled">Неактивна</span>}
-          <div className="card__meta">{formatDateTime(training.date)}</div>
-          <div className="card__meta">{formatDurationNs(training.duration)}</div>
-          <OccupancyBar booked={training.bookedCount} max={training.maxQuantity} />
-        </div>
-        {myBookingId != null ? (
-          <Button variant="danger" loading={cancelling} onClick={() => onCancel(myBookingId)}>
-            Отписаться
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            disabled={isPast || isFull}
-            loading={signingUp}
-            onClick={() => onSignUp(training.id)}
-          >
-            {isPast ? "Тренировка прошла" : isFull ? "Нет мест" : "Записаться"}
-          </Button>
-        )}
-      </div>
-
-      <div className="training-card__toolbar">
-        <button className="training-card__toggle" onClick={toggleParticipants}>
-          {expanded ? "Скрыть участников" : "Кто записан"}
-        </button>
-        {claims?.is_admin && (
-          <button className="training-card__toggle" onClick={() => setAdminOpen(true)}>
-            Управление
-          </button>
-        )}
-      </div>
-
-      {adminOpen && (
-        <TrainingAdminModal
-          training={training}
-          onClose={() => setAdminOpen(false)}
-          onUpdated={(updated) => onTrainingUpdated?.(updated)}
-          onDeleted={(id) => {
-            setAdminOpen(false);
-            onTrainingDeleted?.(id);
-          }}
-        />
-      )}
-
-      {expanded && (
-        <div className="participants">
-          {loading && (
-            <div className="participants__loading">
-              <Spinner size={16} />
-            </div>
-          )}
-          {error && <div className="participants__error">{error}</div>}
-          {participants?.length === 0 && <div className="participants__empty">Пока никто не записался</div>}
-          {participants && participants.length > 0 && (
-            <ul className="participants__list">
-              {participants.map((p) => {
-                const fullName = [p.firstName, p.lastName].filter(Boolean).join(" ");
-                return (
-                  <li key={p.userId}>
-                    <div className="participants__name">
-                      {fullName || "Без имени"}
-                      <ContactLinks identities={p.identities} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
+    <button className="sc-agenda-row" type="button" onClick={() => onOpen(training)}>
+      <span className="sc-times">
+        {clock.format(start)}
+        <small>{clock.format(start + training.duration / 1e6)}</small>
+      </span>
+      <span className="sc-grow">
+        <b>{training.description}</b>
+        <small>{[training.venue, t(status)].filter(Boolean).join(" · ")}</small>
+        <OccupancyBar booked={training.bookedCount} max={training.maxQuantity} />
+      </span>
+      <span aria-hidden="true">›</span>
+    </button>
   );
 }

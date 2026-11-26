@@ -3,11 +3,11 @@ package user
 import "time"
 
 type User struct {
-	Id         int    `json:"id"`
-	FirstName  string `json:"firstName"`
-	LastName   string `json:"lastName"`
-	IsApproved bool   `json:"isApproved"`
-	IsAdmin    bool   `json:"isAdmin"`
+	Id            int    `json:"id"`
+	FirstName     string `json:"firstName"`
+	LastName      string `json:"lastName"`
+	ProfileLocked bool   `json:"profileLocked"`
+	IsAdmin       bool   `json:"isAdmin"`
 
 	IsRegistered bool      `json:"isRegistered"`
 	CreatedAt    time.Time `json:"createdAt"`

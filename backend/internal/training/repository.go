@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"prodApp/internal/platform/apperrors"
+	"prodApp/internal/section"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,15 +24,16 @@ func NewPostgresTrainingRepository(pool *pgxpool.Pool) *PostgresTrainingReposito
 	return &PostgresTrainingRepository{pool: pool}
 }
 
-func (p *PostgresTrainingRepository) Create(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
+func (p *PostgresTrainingRepository) Create(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration, venue, details string) (*Training, error) {
 	row := p.pool.QueryRow(ctx,
-		"INSERT INTO trainings (description, date, max_quantity, duration_ns) VALUES ($1, $2, $3, $4) "+
-			"RETURNING id, description, date, max_quantity, duration_ns, is_active, created_at",
-		description, date, maxQuantity, duration,
+		`INSERT INTO trainings (description, date, max_quantity, duration_ns, section_id, venue, details)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, description, date, max_quantity, duration_ns, is_active, created_at, venue, details`,
+		description, date, maxQuantity, duration, section.ID(ctx), venue, details,
 	)
 
 	var tr Training
-	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt)
+	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.Venue, &tr.Details)
 
 	if err != nil {
 		return nil, fmt.Errorf("error inserting training: %w", err)
@@ -42,10 +44,12 @@ func (p *PostgresTrainingRepository) Create(ctx context.Context, description str
 	return &tr, nil
 }
 
-func (p *PostgresTrainingRepository) Update(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool) error {
+func (p *PostgresTrainingRepository) Update(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool, venue, details *string) error {
 	tag, err := p.pool.Exec(ctx,
-		"UPDATE trainings SET description = $2, date = $3, max_quantity = $4, duration_ns = $5, is_active = $6 WHERE id = $1",
-		id, description, date, maxQuantity, duration, isActive,
+		`UPDATE trainings SET description = $2, date = $3, max_quantity = $4, duration_ns = $5, is_active = $6,
+		      venue = coalesce($8, venue), details = coalesce($9, details)
+		 WHERE id = $1 AND section_id = $7`,
+		id, description, date, maxQuantity, duration, isActive, section.ID(ctx), venue, details,
 	)
 
 	if err != nil {
@@ -60,7 +64,7 @@ func (p *PostgresTrainingRepository) Update(ctx context.Context, id int, descrip
 }
 
 func (p *PostgresTrainingRepository) Delete(ctx context.Context, id int) error {
-	tag, err := p.pool.Exec(ctx, "DELETE FROM trainings WHERE id = $1", id)
+	tag, err := p.pool.Exec(ctx, "DELETE FROM trainings WHERE id = $1 AND section_id=$2", id, section.ID(ctx))
 
 	if err != nil {
 		return fmt.Errorf("error deleting training with id %d: %w", id, err)
@@ -96,18 +100,21 @@ func (p *PostgresTrainingRepository) HasBookings(ctx context.Context, trainingId
 
 const selectTrainingsWithBookedCount = `
 	SELECT t.id, t.description, t.date, t.max_quantity, t.duration_ns, t.is_active, t.created_at, t.recurring_training_id,
-	       COUNT(b.id) FILTER (WHERE b.status = 'active') AS booked_count
+	       COUNT(b.id) FILTER (WHERE b.status = 'active') AS booked_count, t.venue, t.details
 	FROM trainings t
 	LEFT JOIN bookings b ON b.training_id = t.id`
 
 func (p *PostgresTrainingRepository) FindById(ctx context.Context, id int) (*Training, error) {
 	row := p.pool.QueryRow(ctx,
-		selectTrainingsWithBookedCount+" WHERE t.id = $1 GROUP BY t.id", id)
+		selectTrainingsWithBookedCount+" WHERE t.id = $1 AND t.section_id=$2 GROUP BY t.id", id, section.ID(ctx))
 
 	var tr Training
-	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.RecurringTrainingId, &tr.BookedCount)
+	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.RecurringTrainingId, &tr.BookedCount, &tr.Venue, &tr.Details)
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &apperrors.NotFoundError{}
+		}
 		return nil, fmt.Errorf("training with id %v: %w", id, err)
 	}
 
@@ -115,7 +122,7 @@ func (p *PostgresTrainingRepository) FindById(ctx context.Context, id int) (*Tra
 }
 
 func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, error) {
-	rows, err := p.pool.Query(ctx, selectTrainingsWithBookedCount+" GROUP BY t.id ORDER BY t.id DESC")
+	rows, err := p.pool.Query(ctx, selectTrainingsWithBookedCount+" WHERE t.section_id=$1 GROUP BY t.id ORDER BY t.id DESC", section.ID(ctx))
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting trainings: %w", err)
@@ -127,7 +134,7 @@ func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, er
 	for rows.Next() {
 		var tr Training
 
-		err := rows.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.RecurringTrainingId, &tr.BookedCount)
+		err := rows.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.RecurringTrainingId, &tr.BookedCount, &tr.Venue, &tr.Details)
 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning training: %w", err)
@@ -145,15 +152,15 @@ func (p *PostgresTrainingRepository) GetAll(ctx context.Context) ([]Training, er
 
 func (p *PostgresTrainingRepository) CreateFromOccurrence(ctx context.Context, recurringId int, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
 	row := p.pool.QueryRow(ctx,
-		`INSERT INTO trainings (description, date, max_quantity, duration_ns, recurring_training_id)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO trainings (description, date, max_quantity, duration_ns, recurring_training_id, section_id, venue, details)
+		 SELECT $1, $2, $3, $4, id, section_id, venue, details FROM recurring_trainings WHERE id=$5 AND section_id=$6
 		 ON CONFLICT (recurring_training_id, date) DO NOTHING
-		 RETURNING id, description, date, max_quantity, duration_ns, is_active, created_at`,
-		description, date, maxQuantity, duration, recurringId,
+		 RETURNING id, description, date, max_quantity, duration_ns, is_active, created_at, venue, details`,
+		description, date, maxQuantity, duration, recurringId, section.ID(ctx),
 	)
 
 	var tr Training
-	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt)
+	err := row.Scan(&tr.Id, &tr.Description, &tr.Date, &tr.MaxQuantity, &tr.Duration, &tr.IsActive, &tr.CreatedAt, &tr.Venue, &tr.Details)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -177,16 +184,16 @@ func NewPostgresRecurringTrainingRepository(pool *pgxpool.Pool) *PostgresRecurri
 	return &PostgresRecurringTrainingRepository{pool: pool}
 }
 
-func (p *PostgresRecurringTrainingRepository) Create(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration) (*RecurringTraining, error) {
+func (p *PostgresRecurringTrainingRepository) Create(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, venue, details string) (*RecurringTraining, error) {
 	row := p.pool.QueryRow(ctx,
-		`INSERT INTO recurring_trainings (description, anchor_date, max_quantity, duration_ns, lead_time_ns)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at`,
-		description, anchorDate, maxQuantity, duration, leadTime,
+		`INSERT INTO recurring_trainings (description, anchor_date, max_quantity, duration_ns, lead_time_ns, section_id, venue, details)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at, venue, details`,
+		description, anchorDate, maxQuantity, duration, leadTime, section.ID(ctx), venue, details,
 	)
 
 	var rt RecurringTraining
-	err := row.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt)
+	err := row.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt, &rt.Venue, &rt.Details)
 
 	if err != nil {
 		return nil, fmt.Errorf("error inserting recurring training: %w", err)
@@ -195,17 +202,18 @@ func (p *PostgresRecurringTrainingRepository) Create(ctx context.Context, descri
 	return &rt, nil
 }
 
-func (p *PostgresRecurringTrainingRepository) Update(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool) (*RecurringTraining, error) {
+func (p *PostgresRecurringTrainingRepository) Update(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool, venue, details *string) (*RecurringTraining, error) {
 	row := p.pool.QueryRow(ctx,
 		`UPDATE recurring_trainings
-		 SET description = $2, anchor_date = $3, max_quantity = $4, duration_ns = $5, lead_time_ns = $6, is_active = $7
-		 WHERE id = $1
-		 RETURNING id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at`,
-		id, description, anchorDate, maxQuantity, duration, leadTime, isActive,
+		 SET description = $2, anchor_date = $3, max_quantity = $4, duration_ns = $5, lead_time_ns = $6,
+		    is_active = $7, venue = coalesce($9, venue), details = coalesce($10, details)
+		 WHERE id = $1 AND section_id=$8
+		 RETURNING id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at, venue, details`,
+		id, description, anchorDate, maxQuantity, duration, leadTime, isActive, section.ID(ctx), venue, details,
 	)
 
 	var rt RecurringTraining
-	err := row.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt)
+	err := row.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt, &rt.Venue, &rt.Details)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("recurring training with id %d: %w", id, apperrors.NotFoundError{})
@@ -219,7 +227,7 @@ func (p *PostgresRecurringTrainingRepository) Update(ctx context.Context, id int
 
 func (p *PostgresRecurringTrainingRepository) GetAll(ctx context.Context) ([]RecurringTraining, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings ORDER BY id DESC")
+		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at, venue, details FROM recurring_trainings WHERE section_id=$1 ORDER BY id DESC", section.ID(ctx))
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting recurring trainings: %w", err)
@@ -231,7 +239,7 @@ func (p *PostgresRecurringTrainingRepository) GetAll(ctx context.Context) ([]Rec
 	for rows.Next() {
 		var rt RecurringTraining
 
-		err := rows.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt)
+		err := rows.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt, &rt.Venue, &rt.Details)
 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning recurring training: %w", err)
@@ -249,7 +257,7 @@ func (p *PostgresRecurringTrainingRepository) GetAll(ctx context.Context) ([]Rec
 
 func (p *PostgresRecurringTrainingRepository) FindActive(ctx context.Context) ([]RecurringTraining, error) {
 	rows, err := p.pool.Query(ctx,
-		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at FROM recurring_trainings WHERE is_active = TRUE ORDER BY id DESC")
+		"SELECT id, description, anchor_date, max_quantity, duration_ns, lead_time_ns, is_active, created_at,section_id FROM recurring_trainings WHERE is_active = TRUE ORDER BY id DESC")
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting active recurring trainings: %w", err)
@@ -261,7 +269,7 @@ func (p *PostgresRecurringTrainingRepository) FindActive(ctx context.Context) ([
 	for rows.Next() {
 		var rt RecurringTraining
 
-		err := rows.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt)
+		err := rows.Scan(&rt.Id, &rt.Description, &rt.AnchorDate, &rt.MaxQuantity, &rt.Duration, &rt.LeadTime, &rt.IsActive, &rt.CreatedAt, &rt.SectionID)
 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning recurring training: %w", err)
@@ -275,4 +283,15 @@ func (p *PostgresRecurringTrainingRepository) FindActive(ctx context.Context) ([
 	}
 
 	return rules, nil
+}
+
+func (p *PostgresRecurringTrainingRepository) DeleteRule(ctx context.Context, id int) error {
+	tag, err := p.pool.Exec(ctx, "DELETE FROM recurring_trainings WHERE id=$1 AND section_id=$2", id, section.ID(ctx))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return &apperrors.NotFoundError{}
+	}
+	return nil
 }

@@ -1,34 +1,32 @@
-interface Props {
+import { occupancyColor } from "../utils/occupancy";
+import "./schedule.css";
+
+export function OccupancyBar({
+  booked,
+  max,
+  meterOnly = false,
+}: {
   booked: number;
   max: number;
-}
-
-function occupancyColor(ratio: number): string {
-  const hue = 140 - 140 * Math.min(ratio, 1);
-  return `hsl(${hue}, 70%, 45%)`;
-}
-
-export function OccupancyBar({ booked, max }: Props) {
-  const safeMax = Math.max(max, 1);
-  const ratio = Math.min(booked / safeMax, 1);
-  const color = occupancyColor(ratio);
-
-  const segments = Array.from({ length: safeMax }, (_, i) => i < booked);
-
+  meterOnly?: boolean;
+}) {
   return (
-    <div className="occupancy">
-      <div className="occupancy__bar">
-        {segments.map((filled, i) => (
-          <span
+    <span className="sc-meter">
+      <span className="sc-segments" aria-hidden="true">
+        {Array.from({ length: Math.min(120, Math.max(1, max)) }, (_, i) => (
+          <i
             key={i}
-            className="occupancy__segment"
-            style={filled ? { backgroundColor: color } : undefined}
+            style={
+              i * Math.max(1, max / 120) < booked ? { background: occupancyColor(booked, max) } : undefined
+            }
           />
         ))}
-      </div>
-      <div className="occupancy__label">
-        {booked}/{max}
-      </div>
-    </div>
+      </span>
+      {!meterOnly && (
+        <small>
+          {booked}/{max}
+        </small>
+      )}
+    </span>
   );
 }

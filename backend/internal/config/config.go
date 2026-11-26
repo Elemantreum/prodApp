@@ -14,6 +14,7 @@ type Config struct {
 	DBName     string
 	APIPort    string
 
+	TelegramBotName  string
 	TelegramBotToken string
 	VKAppSecretKey   string
 	JWTSigningKey    string
@@ -28,6 +29,7 @@ func LoadConfig() (*Config, error) {
 		DBPassword:       os.Getenv("DB_PASSWORD"),
 		DBName:           os.Getenv("DB_NAME"),
 		APIPort:          getEnvOrDefault("SERVER_PORT", "8080"),
+		TelegramBotName:  strings.TrimPrefix(os.Getenv("TELEGRAM_BOT_USERNAME"), "@"),
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		VKAppSecretKey:   os.Getenv("VK_APP_SECRET_KEY"),
 		JWTSigningKey:    os.Getenv("JWT_SIGNING_KEY"),

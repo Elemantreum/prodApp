@@ -1,3 +1,5 @@
+import { t as translate } from "../i18n";
+import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { User } from "../api/types";
@@ -7,21 +9,40 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { UserCard } from "../components/UserCard";
 
-type Action = "approve" | "admin" | "delete";
-
 export function AdminUsersPage() {
   const { claims } = useAuth();
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<{ userId: number; action: Action } | null>(null);
-  const [query, setQuery] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [params, setParams] = useSearchParams();
+  const search = params.get("q") ?? "";
+  const [query, setQuery] = useState(search);
+  useEffect(() => setQuery(search), [search]);
+  useEffect(() => {
+    if (query === search) return;
+    const timer = setTimeout(
+      () =>
+        setParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            if (query.trim()) next.set("q", query.trim());
+            else next.delete("q");
+            next.delete("page");
+            return next;
+          },
+          { replace: true },
+        ),
+      250,
+    );
+    return () => clearTimeout(timer);
+  }, [query, search, setParams]);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       setUsers(await api.getUsers());
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось загрузить пользователей");
+      setError(e instanceof ApiError ? e.message : translate("Не удалось загрузить пользователей"));
     }
   }, []);
 
@@ -29,33 +50,17 @@ export function AdminUsersPage() {
     load();
   }, [load]);
 
-  async function runAction(user: User, action: Action, fn: () => Promise<User | true>) {
-    setBusy({ userId: user.id, action });
+  async function handleDelete(user: User) {
+    setDeletingId(user.id);
     setError(null);
     try {
-      const result = await fn();
-      if (result !== true) {
-        setUsers((prev) => prev?.map((u) => (u.id === result.id ? result : u)) ?? null);
-      } else {
-        setUsers((prev) => prev?.filter((u) => u.id !== user.id) ?? null);
-      }
+      await api.deleteUser(user.id);
+      setUsers((prev) => prev?.filter((u) => u.id !== user.id) ?? null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Действие не удалось");
+      setError(e instanceof ApiError ? e.message : translate("Действие не удалось"));
     } finally {
-      setBusy(null);
+      setDeletingId(null);
     }
-  }
-
-  function handleToggleApproved(user: User) {
-    runAction(user, "approve", () => (user.isApproved ? api.unapproveUser(user.id) : api.approveUser(user.id)));
-  }
-
-  function handleToggleAdmin(user: User) {
-    runAction(user, "admin", () => (user.isAdmin ? api.removeAdmin(user.id) : api.makeAdmin(user.id)));
-  }
-
-  function handleDelete(user: User) {
-    runAction(user, "delete", () => api.deleteUser(user.id));
   }
 
   async function handleRename(user: User, firstName: string, lastName: string) {
@@ -64,19 +69,26 @@ export function AdminUsersPage() {
       const updated = await api.updateProfile(firstName, lastName, user.id);
       setUsers((prev) => prev?.map((u) => (u.id === updated.id ? updated : u)) ?? null);
     } catch (e) {
-      throw new Error(e instanceof ApiError ? e.message : "Не удалось сохранить имя");
+      throw new Error(e instanceof ApiError ? e.message : translate("Не удалось сохранить имя"));
     }
   }
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = search.trim().toLowerCase();
   const filteredUsers = users?.filter((u) => {
     if (!normalizedQuery) return true;
     const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
     return fullName.includes(normalizedQuery);
   });
 
+  const pages = Math.ceil((filteredUsers?.length ?? 0) / 20);
+  const page = Math.min(pages || 1, Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1));
+  function navigatePage(n: number) {
+    const next = new URLSearchParams(params);
+    next.set("page", String(n));
+    setParams(next);
+  }
   return (
-    <>
+    <section className="card">
       {error && <ErrorBanner message={error} onRetry={load} />}
 
       {users === null && !error && (
@@ -85,30 +97,42 @@ export function AdminUsersPage() {
         </div>
       )}
 
-      {users?.length === 0 && <EmptyState title="Пользователей пока нет" />}
+      {users?.length === 0 && <EmptyState title={translate("Пользователей пока нет")} />}
 
       {users && users.length > 0 && (
         <>
           <input
             type="text"
-            className="search-input"
+            aria-label={translate("Поиск")}
+            className="field"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по имени…"
+            placeholder={translate("Поиск по имени…")}
           />
 
-          {filteredUsers?.length === 0 && <EmptyState title="Никого не нашлось" hint="Попробуй другой запрос" />}
+          {filteredUsers?.length === 0 && (
+            <EmptyState title={translate("Никого не нашлось")} hint={translate("Попробуй другой запрос")} />
+          )}
 
+          {pages > 1 && (
+            <nav aria-label={translate("Пользователи")}>
+              <button disabled={page <= 1} onClick={() => navigatePage(page - 1)}>
+                ‹
+              </button>{" "}
+              {page} / {pages}{" "}
+              <button disabled={page >= pages} onClick={() => navigatePage(page + 1)}>
+                ›
+              </button>
+            </nav>
+          )}
           {filteredUsers && filteredUsers.length > 0 && (
-            <div className="list">
-              {filteredUsers.map((u) => (
+            <div className="admin-users">
+              {filteredUsers.slice((page - 1) * 20, page * 20).map((u) => (
                 <UserCard
                   key={u.id}
                   user={u}
                   isSelf={u.id === claims?.user_id}
-                  busyAction={busy?.userId === u.id ? busy.action : null}
-                  onToggleApproved={handleToggleApproved}
-                  onToggleAdmin={handleToggleAdmin}
+                  deleting={deletingId === u.id}
                   onDelete={handleDelete}
                   onRename={handleRename}
                 />
@@ -117,6 +141,6 @@ export function AdminUsersPage() {
           )}
         </>
       )}
-    </>
+    </section>
   );
 }

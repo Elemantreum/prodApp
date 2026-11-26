@@ -8,15 +8,15 @@ import (
 	"log"
 	"math/big"
 	"prodApp/internal/platform/apperrors"
-	http2 "prodApp/internal/platform/http"
 	"prodApp/internal/platform/outbox"
-	"strconv"
 	"time"
 )
 
 type UserRepository interface {
 	Create(ctx context.Context, user *User) (*User, error)
 	Update(ctx context.Context, user *User) (*User, error)
+	UpdateProfile(ctx context.Context, user *User) (*User, error)
+	DeleteOrphan(ctx context.Context, userID int) error
 	Delete(ctx context.Context, user *User) error
 	FindById(ctx context.Context, id int) (*User, error)
 	GetAll(ctx context.Context) ([]User, error)
@@ -46,14 +46,6 @@ type OnNewUser struct {
 	ExternalId string
 
 	ChatIds []int64
-}
-
-type OnUserApprovalChanged struct {
-	UserId int
-
-	ChatId int64
-
-	Approved bool
 }
 
 type UserService struct {
@@ -131,17 +123,9 @@ func (s *UserService) GetBatchTgById(ctx context.Context, id []int, provider str
 }
 
 func (s *UserService) cleanupOrphan(ctx context.Context, userID int) {
-	remaining, err := s.identityRepo.FindByUserID(ctx, userID)
-	if err != nil || len(remaining) > 0 {
-		return
+	if err := s.userRepo.DeleteOrphan(ctx, userID); err != nil {
+		log.Printf("delete orphan user %d: %v", userID, err)
 	}
-
-	orphan, err := s.userRepo.FindById(ctx, userID)
-	if err != nil {
-		return
-	}
-
-	_ = s.userRepo.Delete(ctx, orphan)
 }
 
 func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, firstName, lastName, username string) (*User, error) {
@@ -157,10 +141,9 @@ func (s *UserService) EnsureProfile(ctx context.Context, provider, externalID, f
 	}
 
 	newUser := &User{
-		FirstName:  firstName,
-		LastName:   lastName,
-		IsApproved: false,
-		IsAdmin:    false,
+		FirstName: firstName,
+		LastName:  lastName,
+		IsAdmin:   false,
 
 		IsRegistered: false,
 	}
@@ -260,98 +243,18 @@ func (s *UserService) GetIdentities(ctx context.Context, userID int) ([]Identity
 	return identities, nil
 }
 
-func (s *UserService) UpdateProfile(ctx context.Context, targetID int, firstName, lastName string, requester *http2.Claims) (*User, error) {
-	user, err := s.userRepo.FindById(ctx, targetID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find user: %w", err)
-	}
-
-	if !requester.IsAdmin {
-		if requester.UserID != targetID {
-			return nil, &apperrors.ForbiddenError{Reason: "можно менять только свой профиль"}
-		}
-		if user.IsApproved {
-			return nil, &apperrors.ForbiddenError{Reason: "профиль уже одобрен, изменить имя может только администратор"}
-		}
-	}
-
+func (s *UserService) UpdateProfile(ctx context.Context, user User, firstName, lastName string) (*User, error) {
 	user.FirstName = firstName
 	user.LastName = lastName
 
 	user.IsRegistered = true
 
-	updated, err := s.userRepo.Update(ctx, user)
+	updated, err := s.userRepo.UpdateProfile(ctx, &user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
 	return updated, nil
-}
-
-func (service *UserService) ApproveUser(ctx context.Context, id int) error {
-	user, err := service.userRepo.FindById(ctx, id)
-
-	if err != nil {
-		return fmt.Errorf("failed to find user: %w", err)
-	}
-
-	user.IsApproved = true
-
-	_, err = service.userRepo.Update(ctx, user)
-
-	if err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
-	}
-
-	service.publishApprovalChanged(ctx, id, true)
-
-	return nil
-}
-
-func (service *UserService) publishApprovalChanged(ctx context.Context, userId int, approved bool) {
-	identities, err := service.identityRepo.FindByUserID(ctx, userId)
-	if err != nil {
-		log.Printf("resolve identities for user %d: %v", userId, err)
-		return
-	}
-
-	for _, identity := range identities {
-		if identity.Provider != "telegram" {
-			continue
-		}
-
-		chatId, err := strconv.ParseInt(identity.ExternalId, 10, 64)
-		if err != nil {
-			log.Printf("parse telegram chat id for user %d: %v", userId, err)
-			return
-		}
-
-		event := OnUserApprovalChanged{UserId: userId, ChatId: chatId, Approved: approved}
-		if err := outbox.Create(ctx, service.outbox, event); err != nil {
-			log.Printf("outbox: %v", err)
-		}
-		return
-	}
-}
-
-func (service *UserService) UnapproveUser(ctx context.Context, id int) error {
-	user, err := service.userRepo.FindById(ctx, id)
-
-	if err != nil {
-		return fmt.Errorf("failed to find user: %w", err)
-	}
-
-	user.IsApproved = false
-
-	_, err = service.userRepo.Update(ctx, user)
-
-	if err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
-	}
-
-	service.publishApprovalChanged(ctx, id, false)
-
-	return nil
 }
 
 func (service *UserService) DeleteUser(ctx context.Context, id int) error {

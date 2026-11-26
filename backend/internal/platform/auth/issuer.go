@@ -30,12 +30,11 @@ func (t *TokenIssuer) RefreshTokenTTL() time.Duration {
 	return t.refreshTokenTTL
 }
 
-func (t *TokenIssuer) IssueAccessToken(userID int, isAdmin, isApproved bool) (string, error) {
+func (t *TokenIssuer) IssueAccessToken(userID int, isAdmin bool) (string, error) {
 	now := time.Now()
 	claims := http2.Claims{
-		UserID:     userID,
-		IsAdmin:    isAdmin,
-		IsApproved: isApproved,
+		UserID:  userID,
+		IsAdmin: isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.Itoa(userID),
 			IssuedAt:  jwt.NewNumericDate(now),

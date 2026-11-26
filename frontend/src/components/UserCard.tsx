@@ -1,3 +1,6 @@
+import { t as translate } from "../i18n";
+import { AdminDialog } from "./AdminUI";
+import { BookingHistory } from "./BookingHistory";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { User } from "../api/types";
@@ -12,15 +15,15 @@ const PLATFORM_LABEL: Record<string, string> = {
 interface Props {
   user: User;
   isSelf: boolean;
-  busyAction: string | null;
-  onToggleApproved: (user: User) => void;
-  onToggleAdmin: (user: User) => void;
+  deleting: boolean;
   onDelete: (user: User) => void;
   onRename: (user: User, firstName: string, lastName: string) => Promise<void>;
 }
 
-export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleAdmin, onDelete, onRename }: Props) {
-  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Без имени";
+export function UserCard({ user, isSelf, deleting, onDelete, onRename }: Props) {
+  const [open, setOpen] = useState(false);
+  const [history, setHistory] = useState(false);
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || translate("Без имени");
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -54,99 +57,117 @@ export function UserCard({ user, isSelf, busyAction, onToggleApproved, onToggleA
       await onRename(user, firstName.trim(), lastName.trim());
       setEditing(false);
     } catch (e) {
-      setRenameError(e instanceof Error ? e.message : "Не удалось сохранить");
+      setRenameError(e instanceof Error ? e.message : translate("Не удалось сохранить"));
     } finally {
       setRenaming(false);
     }
   }
 
   return (
-    <div className="user-card">
-      <div className="user-card__info">
-        <div className="card__title">
-          {displayName} {isSelf && <span className="user-card__you">(вы)</span>}
-          <ContactLinks identities={user.identities} />
-        </div>
-        <div className="card__meta">
-          Платформы:{" "}
-          {user.identities.length === 0
-            ? "нет данных"
-            : user.identities.map((i) => PLATFORM_LABEL[i.provider] ?? i.provider).join(", ")}
-        </div>
-        <div className="user-card__badges">
-          <span className={`badge ${user.isApproved ? "badge--active" : "badge--not_completed"}`}>
-            {user.isApproved ? "Одобрен" : "Не одобрен"}
-          </span>
-          {user.isAdmin && <span className="badge badge--admin">Админ</span>}
-        </div>
+    <div className="row">
+      <span className="avatar" aria-hidden="true">
+        {user.firstName[0]}
+        {user.lastName[0]}
+      </span>
+      <div className="grow">
+        <b>{displayName}</b>
+        <small>{user.isAdmin ? translate("Администратор системы") : translate("Профиль системы")}</small>
       </div>
-
-      {editing ? (
-        <form className="form" onSubmit={handleRenameSubmit}>
-          <label className="form__field">
-            <span>Имя</span>
-            <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          </label>
-          <label className="form__field">
-            <span>Фамилия</span>
-            <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          </label>
-          {renameError && <div className="participants__error">{renameError}</div>}
-          <div className="user-card__actions-row">
-            <Button variant="secondary" type="button" disabled={renaming} onClick={() => setEditing(false)}>
-              Отмена
-            </Button>
-            <Button type="submit" loading={renaming}>
-              Сохранить
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div className="user-card__actions">
-          <Button variant="secondary" disabled={busyAction !== null} onClick={startEditing}>
-            Изменить имя
-          </Button>
-          <Button
-            variant={user.isApproved ? "secondary" : "primary"}
-            loading={busyAction === "approve"}
-            disabled={busyAction !== null}
-            onClick={() => onToggleApproved(user)}
-          >
-            {user.isApproved ? "Снять одобрение" : "Одобрить"}
-          </Button>
-          <Button
-            variant="secondary"
-            loading={busyAction === "admin"}
-            disabled={busyAction !== null || (isSelf && user.isAdmin)}
-            onClick={() => onToggleAdmin(user)}
-          >
-            {user.isAdmin ? "Забрать админку" : "Сделать админом"}
-          </Button>
-          {confirmingDelete ? (
-            <div className="user-card__actions-row">
-              <Button variant="secondary" disabled={busyAction !== null} onClick={() => setConfirmingDelete(false)}>
-                Отмена
-              </Button>
-              <Button
-                variant="danger"
-                loading={busyAction === "delete"}
-                disabled={busyAction !== null || isSelf}
-                onClick={handleDeleteClick}
-              >
-                Точно удалить?
-              </Button>
+      <button className="btn" onClick={() => setOpen(true)}>
+        {translate("Профиль")}
+      </button>
+      {open && (
+        <AdminDialog
+          title={displayName}
+          busy={renaming || deleting}
+          onClose={() => {
+            setOpen(false);
+            setEditing(false);
+            setHistory(false);
+            setConfirmingDelete(false);
+          }}
+        >
+          <div className="user-card__info">
+            <div className="card__title">
+              {displayName} {isSelf && <span className="user-card__you">{translate("(вы)")}</span>}
+              <ContactLinks identities={user.identities} />
             </div>
+            <div className="card__meta">
+              {" "}
+              {translate("Платформы:")}{" "}
+              {user.identities.length === 0
+                ? translate("нет данных")
+                : user.identities.map((i) => PLATFORM_LABEL[i.provider] ?? i.provider).join(", ")}
+            </div>
+            {user.isAdmin && <span className="badge badge--admin">{translate("Админ")}</span>}
+          </div>
+
+          {editing ? (
+            <form className="form" onSubmit={handleRenameSubmit}>
+              <label className="form__field">
+                <span>{translate("Имя")}</span>
+                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              </label>
+              <label className="form__field">
+                <span>{translate("Фамилия")}</span>
+                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </label>
+              {renameError && <div className="participants__error">{renameError}</div>}
+              <div className="user-card__actions-row">
+                <Button variant="secondary" type="button" disabled={renaming} onClick={() => setEditing(false)}>
+                  {" "}
+                  {translate("Отмена")}{" "}
+                </Button>
+                <Button type="submit" loading={renaming}>
+                  {" "}
+                  {translate("Сохранить")}{" "}
+                </Button>
+              </div>
+            </form>
           ) : (
-            <Button
-              variant="danger"
-              loading={busyAction === "delete"}
-              disabled={busyAction !== null || isSelf}
-              onClick={handleDeleteClick}
-            >
-              Удалить
-            </Button>
+            <div className="user-card__actions">
+              <Button variant="secondary" disabled={deleting} onClick={startEditing}>
+                {" "}
+                {translate("Изменить имя")}{" "}
+              </Button>
+              <Button variant="secondary" onClick={() => setHistory((prev) => !prev)}>
+                {history ? translate("Скрыть историю") : translate("История записей")}
+              </Button>
+              {history && <BookingHistory userId={user.id} />}
+              {confirmingDelete ? (
+                <div className="user-card__actions-row">
+                  <Button
+                    variant="secondary"
+                    disabled={deleting}
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    {" "}
+                    {translate("Отмена")}{" "}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    loading={deleting}
+                    disabled={isSelf}
+                    onClick={handleDeleteClick}
+                  >
+                    {" "}
+                    {translate("Точно удалить?")}{" "}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="danger"
+                  loading={deleting}
+                  disabled={isSelf}
+                  onClick={handleDeleteClick}
+                >
+                  {" "}
+                  {translate("Удалить")}{" "}
+                </Button>
+              )}
+            </div>
           )}
-        </div>
+        </AdminDialog>
       )}
     </div>
   );

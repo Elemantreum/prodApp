@@ -1,6 +1,8 @@
 export interface Training {
+  venue: string;
   id: number;
   description: string;
+  details?: string;
   date: string;
   maxQuantity: number;
   duration: number;
@@ -11,8 +13,10 @@ export interface Training {
 }
 
 export interface RecurringTraining {
+  venue: string;
   id: number;
   description: string;
+  details?: string;
   anchorDate: string;
   maxQuantity: number;
   duration: number;
@@ -60,7 +64,9 @@ export interface SinnerStats {
 }
 
 export interface CreateTrainingInput {
+  venue?: string;
   description: string;
+  details?: string;
   date: string;
   maxQuantity: number;
   duration: number;
@@ -86,10 +92,47 @@ export interface User {
   id: number;
   firstName: string;
   lastName: string;
-  isApproved: boolean;
+  profileLocked: boolean;
   isAdmin: boolean;
   isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
   identities: Identity[];
+}
+
+export interface Section {
+  id: number;
+  name: string;
+  logo: string;
+  admin: boolean;
+}
+
+export interface SectionDirectory {
+  sections: (Section & { venues: string[] })[];
+  systemAdmin: boolean;
+}
+
+export type InvitedSection = Pick<Section, "id" | "name" | "logo">;
+
+export interface SectionInviteInput {
+  expiresAt: string;
+  maxUses: number;
+}
+
+export interface SectionInvite extends SectionInviteInput {
+  id: number;
+  uses: number;
+  revokedAt: string | null;
+  code?: string;
+}
+
+export interface HistoryItem {
+  id: number;
+  userId: number;
+  name: string;
+  trainingId: number;
+  description: string;
+  date: string;
+  status: BookingStatus;
+  section: string;
 }

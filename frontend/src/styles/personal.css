@@ -1,0 +1,140 @@
+.personal-grid {
+  align-items: start;
+}
+
+.personal-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.personal-panel :is(h2, p),
+.personal-ranking {
+  margin: 0;
+}
+
+.personal-panel > .btn,
+.personal-form > .btn {
+  align-self: start;
+}
+
+.personal-panel small,
+.personal-panel .muted {
+  color: var(--muted);
+}
+
+.personal-form,
+.personal-form label,
+.personal-detail {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.personal-form {
+  gap: 1rem;
+}
+
+.personal-form input,
+.personal-dev textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.personal-gate {
+  max-width: 36rem;
+}
+
+.personal-dev summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.personal-dev textarea {
+  margin-block: 0.7rem;
+}
+
+.personal-session,
+.personal-section,
+.personal-session-open {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.personal-session-open {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+}
+
+.personal-session-open:hover strong {
+  text-decoration: underline;
+}
+
+.personal-detail {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.personal-mark {
+  color: var(--accent);
+  background: var(--tint);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.82rem;
+}
+
+.personal-avatar {
+  background: var(--raised);
+  display: grid;
+  place-items: center;
+  flex: 0 0 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.personal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.personal-code {
+  letter-spacing: 0.16em;
+  font-size: 1.4rem;
+}
+
+.personal-ranking {
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 520px) {
+  .personal-session-open {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.personal-link-form {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 16px;
+}
