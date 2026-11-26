@@ -41,6 +41,7 @@ interface TelegramHapticFeedback {
 
 export interface TelegramWebApp {
   initData: string;
+  initDataUnsafe?: { start_param?: string };
   colorScheme: "light" | "dark";
   themeParams: TelegramThemeParams;
   MainButton: TelegramMainButton;
@@ -71,4 +72,12 @@ export function isTelegram(): boolean {
 
 export function getTelegramInitData(): string {
   return window.Telegram?.WebApp?.initData ?? "";
+}
+
+export function getTelegramInviteCode(): string | undefined {
+  const code =
+    new URLSearchParams(getTelegramInitData()).get("start_param") ??
+    getTelegramWebApp()?.initDataUnsafe?.start_param ??
+    new URLSearchParams(window.location.search).get("tgWebAppStartParam");
+  return typeof code === "string" && /^[A-Za-z0-9_-]{43}$/.test(code) ? code : undefined;
 }

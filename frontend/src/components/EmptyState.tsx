@@ -1,6 +1,6 @@
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="empty-state">
+    <div className="empty-state" role="status">
       <div className="empty-state__title">{title}</div>
       {hint && <div className="empty-state__hint">{hint}</div>}
     </div>

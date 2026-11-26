@@ -666,7 +666,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "аккаунт ещё не одобрен администратором",
+                        "description": "требуется регистрация и доступ к секции",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1211,72 +1211,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/user/approve": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Только для админов",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Одобрить пользователя",
-                "parameters": [
-                    {
-                        "description": "ID пользователя",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/user.userIdRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/user.userWithIdentities"
-                        }
-                    },
-                    "401": {
-                        "description": "не авторизован",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "нет прав администратора",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "внутренняя ошибка сервера",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/user/delete": {
             "post": {
                 "security": [
@@ -1768,72 +1702,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/user/unapprove": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Только для админов",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Снять одобрение с пользователя",
-                "parameters": [
-                    {
-                        "description": "ID пользователя",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/user.userIdRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/user.userWithIdentities"
-                        }
-                    },
-                    "401": {
-                        "description": "не авторизован",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "нет прав администратора",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "внутренняя ошибка сервера",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/user/updateProfile": {
             "post": {
                 "security": [
@@ -1841,7 +1709,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "userId в теле — 0 или отсутствует значит \"себя\". Обычный пользователь может менять только себя, и только пока не одобрен администратором — после одобрения имя \"замораживается\" и дальше его может поменять только админ (кому угодно и когда угодно).",
+                "description": "Пользователь может редактировать собственный профиль до вступления в секцию. Системный администратор может редактировать любой профиль. Отсутствующий или нулевой userId означает собственный профиль.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1880,7 +1748,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "чужой профиль или уже одобрен",
+                        "description": "чужой профиль или имя уже закрыто для редактирования",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2080,6 +1948,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "details": {
+                    "type": "string"
+                },
                 "duration": {
                     "type": "integer"
                 },
@@ -2118,6 +1989,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "details": {
+                    "type": "string"
+                },
                 "duration": {
                     "type": "integer"
                 },
@@ -2147,6 +2021,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "details": {
+                    "type": "string"
+                },
                 "duration": {
                     "type": "integer"
                 },
@@ -2167,6 +2044,9 @@ const docTemplate = `{
                     "example": "2002-10-02T15:00:00Z"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "details": {
                     "type": "string"
                 },
                 "duration": {
@@ -2196,6 +2076,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "details": {
+                    "type": "string"
+                },
                 "duration": {
                     "type": "integer"
                 },
@@ -2222,6 +2105,9 @@ const docTemplate = `{
                     "example": "2002-10-02T15:00:00Z"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "details": {
                     "type": "string"
                 },
                 "duration": {
@@ -2330,15 +2216,14 @@ const docTemplate = `{
                 "isAdmin": {
                     "type": "boolean"
                 },
-                "isApproved": {
-                    "type": "boolean"
-                },
                 "isRegistered": {
-                    "description": "IsRegistered — прошёл ли обязательный шаг \"как вас зовут\" при первом\nвходе. Новые аккаунты создаются с false (EnsureProfile) и переводятся в\ntrue первым же успешным UpdateProfile — неважно, вызван он самим юзером\nс экрана регистрации или админом. Чисто фронтовый гейт: на бронирование\nи прочую бизнес-логику не влияет, в отличие от IsApproved.",
                     "type": "boolean"
                 },
                 "lastName": {
                     "type": "string"
+                },
+                "profileLocked": {
+                    "type": "boolean"
                 },
                 "updatedAt": {
                     "type": "string"

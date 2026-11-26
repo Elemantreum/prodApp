@@ -1,7 +1,6 @@
 export interface JwtClaims {
   user_id: number;
   is_admin: boolean;
-  is_approved: boolean;
   sub: string;
   exp: number;
   iat: number;

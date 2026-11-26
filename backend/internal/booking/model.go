@@ -50,3 +50,29 @@ type SinnerStats struct {
 	NoShows           int    `json:"noShows"`
 	PenaltyPoints     int    `json:"penaltyPoints"`
 }
+
+type BookingChange struct {
+	PreviousUserID int    `json:"previousUserId"`
+	Action         string `json:"action"`
+	TrainingID     int    `json:"trainingId"`
+	BookingID      int    `json:"bookingId"`
+	UserID         int    `json:"userId"`
+	TargetID       int    `json:"targetId"`
+}
+
+type WaitingMember struct {
+	ID        int    `json:"id"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
+
+type HistoryItem struct {
+	ID          int           `json:"id"`
+	UserID      int           `json:"userId"`
+	Name        string        `json:"name"`
+	TrainingID  int           `json:"trainingId"`
+	Description string        `json:"description"`
+	Date        time.Time     `json:"date"`
+	Status      BookingStatus `json:"status"`
+	Section     string        `json:"section"`
+}

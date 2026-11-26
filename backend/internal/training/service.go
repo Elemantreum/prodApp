@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log"
 	"prodApp/internal/platform/apperrors"
-	http2 "prodApp/internal/platform/http"
 	"prodApp/internal/platform/outbox"
+	"prodApp/internal/section"
 	"time"
 )
 
 type TrainingRepository interface {
-	Create(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error)
-	Update(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool) error
+	Create(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration, venue, details string) (*Training, error)
+	Update(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool, venue, details *string) error
 	Delete(ctx context.Context, id int) error
 	FindById(ctx context.Context, id int) (*Training, error)
 	GetAll(ctx context.Context) ([]Training, error)
@@ -24,8 +24,9 @@ type TrainingRepository interface {
 }
 
 type RecurringTrainingRepository interface {
-	Create(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration) (*RecurringTraining, error)
-	Update(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool) (*RecurringTraining, error)
+	DeleteRule(context.Context, int) error
+	Create(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, venue, details string) (*RecurringTraining, error)
+	Update(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool, venue, details *string) (*RecurringTraining, error)
 	GetAll(ctx context.Context) ([]RecurringTraining, error)
 	FindActive(ctx context.Context) ([]RecurringTraining, error)
 }
@@ -45,7 +46,7 @@ func NewTrainingService(repo TrainingRepository, recurringRepo RecurringTraining
 	return &TrainingService{repo: repo, recurringRepo: recurringRepo, outbox: outboxRepo, chatIds: chatIds}
 }
 
-func (s *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration) (*Training, error) {
+func (s *TrainingService) AddTraining(ctx context.Context, description string, date time.Time, maxQuantity int, duration time.Duration, venue, details string) (*Training, error) {
 	if description == "" {
 		return nil, fmt.Errorf("description is required")
 	}
@@ -62,7 +63,7 @@ func (s *TrainingService) AddTraining(ctx context.Context, description string, d
 		return nil, fmt.Errorf("duration can't be less or equal than 0")
 	}
 
-	saved, err := s.repo.Create(ctx, description, date, maxQuantity, duration)
+	saved, err := s.repo.Create(ctx, description, date, maxQuantity, duration, venue, details)
 
 	if err != nil {
 		return nil, fmt.Errorf("saving training: %w", err)
@@ -94,7 +95,7 @@ func (s *TrainingService) publishCreateEvent(ctx context.Context, t *Training) {
 	}
 }
 
-func (s *TrainingService) UpdateTraining(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool) (*Training, error) {
+func (s *TrainingService) UpdateTraining(ctx context.Context, id int, description string, date time.Time, maxQuantity int, duration time.Duration, isActive bool, venue, details *string) (*Training, error) {
 	if description == "" {
 		return nil, fmt.Errorf("description is required")
 	}
@@ -116,7 +117,7 @@ func (s *TrainingService) UpdateTraining(ctx context.Context, id int, descriptio
 		return nil, fmt.Errorf("finding training before update: %w", err)
 	}
 
-	err = s.repo.Update(ctx, id, description, date, maxQuantity, duration, isActive)
+	err = s.repo.Update(ctx, id, description, date, maxQuantity, duration, isActive, venue, details)
 
 	if err != nil {
 		return nil, fmt.Errorf("updating training: %w", err)
@@ -165,14 +166,14 @@ func (s *TrainingService) FindById(ctx context.Context, id int) (*Training, erro
 	return training, nil
 }
 
-func (s *TrainingService) GetAll(ctx context.Context, requester *http2.Claims) ([]Training, error) {
+func (s *TrainingService) GetAll(ctx context.Context, includeInactive bool) ([]Training, error) {
 	trainings, err := s.repo.GetAll(ctx)
 
 	if err != nil {
 		return nil, fmt.Errorf("getting trainings: %w", err)
 	}
 
-	if requester != nil && requester.IsAdmin {
+	if includeInactive {
 		return trainings, nil
 	}
 
@@ -217,12 +218,12 @@ func (s *TrainingService) DeactivatePastTrainings(ctx context.Context) error {
 
 const week = 7 * 24 * time.Hour
 
-func (service *TrainingService) CreateRule(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration) (*RecurringTraining, error) {
+func (service *TrainingService) CreateRule(ctx context.Context, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, venue, details string) (*RecurringTraining, error) {
 	if err := validateRule(description, anchorDate, maxQuantity, duration, leadTime); err != nil {
 		return nil, err
 	}
 
-	saved, err := service.recurringRepo.Create(ctx, description, anchorDate, maxQuantity, duration, leadTime)
+	saved, err := service.recurringRepo.Create(ctx, description, anchorDate, maxQuantity, duration, leadTime, venue, details)
 
 	if err != nil {
 		return nil, fmt.Errorf("saving recurring training: %w", err)
@@ -245,12 +246,12 @@ func (service *TrainingService) ListRules(ctx context.Context) ([]RecurringTrain
 	return rules, nil
 }
 
-func (service *TrainingService) UpdateRule(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool) (*RecurringTraining, error) {
+func (service *TrainingService) UpdateRule(ctx context.Context, id int, description string, anchorDate time.Time, maxQuantity int, duration time.Duration, leadTime time.Duration, isActive bool, venue, details *string) (*RecurringTraining, error) {
 	if err := validateRule(description, anchorDate, maxQuantity, duration, leadTime); err != nil {
 		return nil, err
 	}
 
-	updated, err := service.recurringRepo.Update(ctx, id, description, anchorDate, maxQuantity, duration, leadTime, isActive)
+	updated, err := service.recurringRepo.Update(ctx, id, description, anchorDate, maxQuantity, duration, leadTime, isActive, venue, details)
 
 	if err != nil {
 		return nil, fmt.Errorf("updating recurring training: %w", err)
@@ -297,7 +298,7 @@ func (service *TrainingService) GenerateOccurrences(ctx context.Context) error {
 	}
 
 	for _, rule := range rules {
-		if err := service.generateForRule(ctx, &rule); err != nil {
+		if err := service.generateForRule(section.WithID(ctx, rule.SectionID), &rule); err != nil {
 			return fmt.Errorf("generating occurrences for rule %d: %w", rule.Id, err)
 		}
 	}
@@ -307,18 +308,39 @@ func (service *TrainingService) GenerateOccurrences(ctx context.Context) error {
 
 func (service *TrainingService) generateForRule(ctx context.Context, rule *RecurringTraining) error {
 	now := time.Now()
+	horizon := now.Add(rule.LeadTime)
 
 	occurrence := rule.AnchorDate
-	for occurrence.Sub(now) <= rule.LeadTime {
-		created, err := service.repo.CreateFromOccurrence(ctx, rule.Id, rule.Description, occurrence, rule.MaxQuantity, rule.Duration)
+
+	if !occurrence.After(now) {
+		elapsed := now.Sub(occurrence)
+		weeks := elapsed/week + 1
+		occurrence = occurrence.Add(weeks * week)
+	}
+
+	for !occurrence.After(horizon) {
+		created, err := service.repo.CreateFromOccurrence(
+			ctx,
+			rule.Id,
+			rule.Description,
+			occurrence,
+			rule.MaxQuantity,
+			rule.Duration,
+		)
 		if err != nil {
 			return err
 		}
+
 		if created != nil {
 			service.publishCreateEvent(ctx, created)
 		}
+
 		occurrence = occurrence.Add(week)
 	}
 
 	return nil
+}
+
+func (service *TrainingService) DeleteRule(ctx context.Context, id int) error {
+	return service.recurringRepo.DeleteRule(ctx, id)
 }

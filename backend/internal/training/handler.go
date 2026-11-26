@@ -16,15 +16,19 @@ type TrainingHandler struct {
 }
 
 type createTrainingRequest struct {
+	Venue       string        `json:"venue"`
 	Description string        `json:"description"`
+	Details     string        `json:"details,omitempty"`
 	Date        time.Time     `json:"date" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
 }
 
 type updateTrainingRequest struct {
+	Venue       *string       `json:"venue"`
 	Id          int           `json:"id"`
 	Description string        `json:"description"`
+	Details     *string       `json:"details,omitempty"`
 	Date        time.Time     `json:"date" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
@@ -36,7 +40,9 @@ type trainingIdRequest struct {
 }
 
 type createRecurringTrainingRequest struct {
+	Venue       string        `json:"venue"`
 	Description string        `json:"description"`
+	Details     string        `json:"details,omitempty"`
 	AnchorDate  time.Time     `json:"anchorDate" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
@@ -44,8 +50,10 @@ type createRecurringTrainingRequest struct {
 }
 
 type updateRecurringTrainingRequest struct {
+	Venue       *string       `json:"venue"`
 	Id          int           `json:"id"`
 	Description string        `json:"description"`
+	Details     *string       `json:"details,omitempty"`
 	AnchorDate  time.Time     `json:"anchorDate" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
@@ -80,7 +88,7 @@ func (h *TrainingHandler) CreateTraining(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	saved, err := h.TrainingService.AddTraining(r.Context(), req.Description, req.Date, req.MaxQuantity, req.Duration)
+	saved, err := h.TrainingService.AddTraining(r.Context(), req.Description, req.Date, req.MaxQuantity, req.Duration, req.Venue, req.Details)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -113,7 +121,7 @@ func (h *TrainingHandler) UpdateTraining(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	updated, err := h.TrainingService.UpdateTraining(r.Context(), req.Id, req.Description, req.Date, req.MaxQuantity, req.Duration, req.IsActive)
+	updated, err := h.TrainingService.UpdateTraining(r.Context(), req.Id, req.Description, req.Date, req.MaxQuantity, req.Duration, req.IsActive, req.Venue, req.Details)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -180,7 +188,7 @@ func (h *TrainingHandler) CreateRecurringTraining(w http.ResponseWriter, r *http
 		return
 	}
 
-	saved, err := h.TrainingService.CreateRule(r.Context(), req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime)
+	saved, err := h.TrainingService.CreateRule(r.Context(), req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime, req.Venue, req.Details)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -236,7 +244,7 @@ func (h *TrainingHandler) UpdateRecurringTraining(w http.ResponseWriter, r *http
 		return
 	}
 
-	updated, err := h.TrainingService.UpdateRule(r.Context(), req.Id, req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime, req.IsActive)
+	updated, err := h.TrainingService.UpdateRule(r.Context(), req.Id, req.Description, req.AnchorDate, req.MaxQuantity, req.Duration, req.LeadTime, req.IsActive, req.Venue, req.Details)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -260,7 +268,7 @@ func (h *TrainingHandler) UpdateRecurringTraining(w http.ResponseWriter, r *http
 func (h *TrainingHandler) GetAllTrainings(w http.ResponseWriter, r *http.Request) {
 	claims, _ := http2.ClaimsFromContext(r.Context())
 
-	trainings, err := h.TrainingService.GetAll(r.Context(), claims)
+	trainings, err := h.TrainingService.GetAll(r.Context(), claims != nil && claims.IsAdmin)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -300,4 +308,17 @@ func (h *TrainingHandler) GetTrainingById(w http.ResponseWriter, r *http.Request
 	}
 
 	http2.RespondJSON(w, http.StatusOK, trainings)
+}
+
+func (h *TrainingHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "id"})
+		return
+	}
+	if err := h.TrainingService.DeleteRule(r.Context(), id); err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, 200, true)
 }

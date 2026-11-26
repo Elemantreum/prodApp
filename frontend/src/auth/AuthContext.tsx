@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { t as translate } from "../i18n";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { api, setAuthToken, setUnauthorizedHandler } from "../api/client";
 import { detectPlatform } from "../platform/detect";
@@ -23,6 +24,7 @@ interface AuthContextValue {
   error: string | null;
   retry: () => void;
   logout: () => void;
+  applyTokens: (tokens: AuthResponse) => void;
   loginWithToken: (token: string) => void;
 }
 
@@ -31,13 +33,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 async function performLogin(platform: Platform): Promise<AuthResponse> {
   if (platform === "telegram") {
     const initData = getTelegramInitData();
-    if (!initData) throw new Error("Telegram initData недоступен");
+    if (!initData) throw new Error(translate("Telegram initData недоступен"));
     return api.authTelegram(initData);
   }
   if (platform === "vk") {
     return api.authVk(getVkLaunchQuery());
   }
-  throw new Error("Открой это приложение внутри Telegram или VK");
+  throw new Error(translate("Открой это приложение внутри Telegram или VK"));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -50,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyTokens = useCallback((next: AuthResponse) => {
     const parsed = decodeJwt(next.access_token);
-    if (!parsed) throw new Error("Сервер вернул некорректный токен");
+    if (!parsed) throw new Error(translate("Сервер вернул некорректный токен"));
     localStorage.setItem(STORAGE_KEY, next.access_token);
     localStorage.setItem(REFRESH_STORAGE_KEY, next.refresh_token);
     setAuthToken(next.access_token);
@@ -60,15 +62,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  const tryRefresh = useCallback(async (): Promise<AuthResponse | null> => {
+  const refreshRequest = useRef<Promise<AuthResponse | null> | null>(null);
+  const tryRefresh = useCallback((): Promise<AuthResponse | null> => {
     const stored = localStorage.getItem(REFRESH_STORAGE_KEY);
-    if (!stored) return null;
-    try {
-      return await api.refreshToken(stored);
-    } catch {
-      localStorage.removeItem(REFRESH_STORAGE_KEY);
-      return null;
+    if (!stored) return Promise.resolve(null);
+    if (!refreshRequest.current) {
+      refreshRequest.current = api
+        .refreshToken(stored)
+        .catch(() => {
+          if (localStorage.getItem(REFRESH_STORAGE_KEY) === stored)
+            localStorage.removeItem(REFRESH_STORAGE_KEY);
+          return null;
+        })
+        .finally(() => {
+          refreshRequest.current = null;
+        });
     }
+    return refreshRequest.current;
   }, []);
 
   useEffect(() => {
@@ -77,18 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tg?.ready();
       tg?.expand();
       const apply = () => {
-        const tp = tg?.themeParams ?? {};
-        applyTheme({
-          "--bg": tp.bg_color,
-          "--secondary-bg": tp.secondary_bg_color,
-          "--text": tp.text_color,
-          "--hint": tp.hint_color,
-          "--accent": tp.button_color ?? tp.link_color,
-          "--accent-text": tp.button_text_color,
-        });
-        if (tp.bg_color) {
-          tg?.setHeaderColor(tp.bg_color);
-          tg?.setBackgroundColor(tp.bg_color);
+        applyTheme(tg?.colorScheme ?? DARK_THEME);
+        const color = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+        if (color) {
+          tg?.setHeaderColor(color);
+          tg?.setBackgroundColor(color);
         }
       };
       apply();
@@ -102,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return subscribeVkTheme((scheme) => applyTheme(scheme === "dark" ? DARK_THEME : LIGHT_THEME));
     }
 
-    applyTheme(LIGHT_THEME);
+    applyTheme(DARK_THEME);
     return undefined;
   }, [platform]);
 
@@ -143,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         if (!cancelled) {
           setStatus("error");
-          setError(e instanceof Error ? e.message : "Не удалось войти");
+          setError(e instanceof Error ? e.message : translate("Не удалось войти"));
         }
       }
     }
@@ -163,7 +166,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return refreshed.access_token;
       }
 
-      if (platform === "browser") return null;
+      if (platform === "browser") {
+        localStorage.removeItem(STORAGE_KEY);
+        setAuthToken(null);
+        setToken(null);
+        setClaims(null);
+        setStatus("unsupported");
+        return null;
+      }
       try {
         const fresh = await performLogin(platform);
         applyTokens(fresh);
@@ -172,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(REFRESH_STORAGE_KEY);
         setStatus("error");
-        setError("Сессия истекла, перезапусти приложение");
+        setError(translate("Сессия истекла, перезапусти приложение"));
         return null;
       }
     });
@@ -185,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const parsed = decodeJwt(raw);
     if (!parsed) {
       setStatus("error");
-      setError("Некорректный токен");
+      setError(translate("Некорректный токен"));
       return;
     }
     localStorage.setItem(STORAGE_KEY, raw);
@@ -209,8 +219,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, platform, token, claims, error, retry, logout, loginWithToken }),
-    [status, platform, token, claims, error, retry, logout, loginWithToken],
+    () => ({ status, platform, token, claims, error, retry, logout, applyTokens, loginWithToken }),
+    [status, platform, token, claims, error, retry, logout, applyTokens, loginWithToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

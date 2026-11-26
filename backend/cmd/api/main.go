@@ -14,6 +14,9 @@ import (
 	http2 "prodApp/internal/platform/http"
 	"prodApp/internal/platform/kafka"
 	"prodApp/internal/platform/outbox"
+	"prodApp/internal/platform/schedule"
+	"prodApp/internal/section"
+	"prodApp/internal/sectioninvite"
 	"prodApp/internal/training"
 	"prodApp/internal/user"
 	"syscall"
@@ -70,14 +73,29 @@ func main() {
 	bookingService := booking.NewBookingService(psqlBookingRepo, psqlTrainingRepo, psqlUserRepo, psqlIdentityRepo)
 	bookingHandler := booking.NewBookingHandler(bookingService)
 
+	psqlSectionRepo := section.NewPostgresSectionRepository(pool)
+	sectionService := section.NewSectionService(psqlSectionRepo)
+	sectionAccess := section.NewSectionAccess(psqlSectionRepo)
+	sectionHandler := section.NewSectionHandler(sectionService, sectionAccess)
+	inviteRepo := sectioninvite.NewPostgresInvitationRepository(pool)
+	inviteService := sectioninvite.NewInvitationService(inviteRepo)
+	inviteHandler := sectioninvite.NewInvitationHandler(inviteService)
+
 	tgAuth := auth.NewTelegramAuthenticator(cfg.TelegramBotToken)
 	vkAuth := auth.NewVKAuthenticator(cfg.VKAppSecretKey)
 	tokenIssuer := auth.NewTokenIssuer(cfg.JWTSigningKey)
 	refreshTokenRepo := auth.NewRefreshTokenRepository(pool)
 	authMiddleware := auth.AuthMiddleware(tokenIssuer)
 
-	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, tokenIssuer, refreshTokenRepo, userService)
+	authService := auth.NewAuthService(tokenIssuer, refreshTokenRepo, userService)
+	authHandler := auth.NewAuthHandler(tgAuth, vkAuth, authService, cfg.TelegramBotName)
 
+	scheduleRepo := schedule.NewPostgresChangeRepository(cfg.DSN())
+	scheduleService := schedule.NewScheduleService(scheduleRepo)
+	scheduleHandler := schedule.NewScheduleHandler(scheduleService, tokenIssuer)
+	updatesCtx, stopUpdates := context.WithCancel(ctx)
+	defer stopUpdates()
+	go scheduleService.Run(updatesCtx)
 	router := chi.NewRouter()
 
 	router.Use(middleware.Logger)
@@ -85,7 +103,7 @@ func main() {
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"https://vk.com", "https://web.telegram.org"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-		AllowedHeaders: []string{"Authorization", "Content-Type"},
+		AllowedHeaders: []string{"Authorization", "Content-Type", "X-Section-ID"},
 	}))
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +124,10 @@ func main() {
 	))
 
 	router.Route("/api/v1", func(r chi.Router) {
+		r.Handle("/schedule/live", scheduleHandler)
 		r.Route("/auth", func(r chi.Router) {
+			r.Get("/telegram/website", authHandler.WebsiteBot)
+			r.Post("/telegram/website", authHandler.WebsiteLogin)
 			r.Post("/telegram", authHandler.TelegramLogin)
 			r.Post("/vk", authHandler.VKLogin)
 			r.Post("/telegram/link", authHandler.TelegramLink)
@@ -117,7 +138,24 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
+			r.Use(sectionAccess.Permissions(false))
+			r.Get("/sections", sectionHandler.List)
+			r.Post("/sections/save", sectionHandler.Save)
+			r.Post("/sections/member", sectionHandler.ChangeMembership)
+			r.Post("/sections/invites/preview", inviteHandler.Preview)
+			r.Post("/sections/invites/redeem", inviteHandler.Redeem)
+			r.With(auth.RequireAdmin).Delete("/sections", sectionHandler.Delete)
+			r.Group(func(r chi.Router) {
+				r.Use(sectionAccess.Permissions(true))
+				r.Use(auth.RequireAdmin)
+				r.Post("/sections/venues", sectionHandler.AddVenue)
+				r.Delete("/sections/venues", sectionHandler.DeleteVenue)
+				r.Get("/sections/invites", inviteHandler.List)
+				r.Post("/sections/invites", inviteHandler.Create)
+				r.Delete("/sections/invites/{id}", inviteHandler.Revoke)
+			})
 			r.Route("/trainings", func(r chi.Router) {
+				r.Use(sectionAccess.Permissions(true))
 				r.Group(func(r chi.Router) {
 					r.Use(auth.RequireAdmin)
 					r.Post("/create", trainingHandler.CreateTraining)
@@ -125,19 +163,29 @@ func main() {
 					r.Post("/delete", trainingHandler.DeleteTraining)
 					r.Post("/recurring/create", trainingHandler.CreateRecurringTraining)
 					r.Get("/recurring/get", trainingHandler.GetRecurringTrainings)
+					r.Delete("/recurring/{id}", trainingHandler.DeleteRule)
 					r.Post("/recurring/update", trainingHandler.UpdateRecurringTraining)
 				})
 				r.Get("/get/{id}", trainingHandler.GetTrainingById)
 				r.Get("/get", trainingHandler.GetAllTrainings)
 			})
 			r.Route("/booking", func(r chi.Router) {
+				r.Use(sectionAccess.Permissions(true))
 				r.Get("/getByUserId", bookingHandler.GetBookingsByUserId)
 				r.Get("/getByTrainingId", bookingHandler.GetParticipants)
+				r.Get("/waitlist", bookingHandler.OwnWaitlist)
+				r.Put("/waitlist", bookingHandler.SetWaiting)
+				r.Delete("/waitlist", bookingHandler.SetWaiting)
 				r.Get("/antiLeaderboard", bookingHandler.GetAntiLeaderboard)
 				r.Post("/signUp", bookingHandler.SignupForTraining)
 				r.Post("/cancel", bookingHandler.CancelBooking)
 				r.Group(func(r chi.Router) {
 					r.Use(auth.RequireAdmin)
+					r.Post("/admin/manage", bookingHandler.Manage)
+					r.Get("/admin/waitlist", bookingHandler.WaitingMembers)
+					r.Get("/admin/history", bookingHandler.SectionBookings)
+					r.Get("/admin/members", sectionHandler.Roster)
+					r.Get("/admin/candidates", sectionHandler.Candidates)
 					r.Get("/admin/getByTrainingId", bookingHandler.GetTrainingBookings)
 					r.Post("/setAttendance", bookingHandler.SetAttendance)
 				})
@@ -150,12 +198,9 @@ func main() {
 
 				r.Group(func(r chi.Router) {
 					r.Use(auth.RequireAdmin)
+					r.Get("/history", bookingHandler.UserHistory)
 					r.Get("/get/{id}", userHandler.GetUserById)
 					r.Get("/get", userHandler.GetAllUsers)
-					r.Post("/approve", userHandler.ApproveUser)
-					r.Post("/unapprove", userHandler.UnapproveUser)
-					r.Post("/makeAdmin", userHandler.MakeAdmin)
-					r.Post("/removeAdmin", userHandler.RemoveAdmin)
 					r.Post("/delete", userHandler.DeleteUser)
 				})
 			})
@@ -211,7 +256,7 @@ func main() {
 	}()
 
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers,
-		"OnCreateTraining", "OnUpdateTraining", "OnNewUser", "OnUserApprovalChanged")
+		"OnCreateTraining", "OnUpdateTraining", "OnNewUser", "OnUserApprovalChanged", "OnTrainingPlaceAvailable")
 	defer func() {
 		if err := kafkaProducer.Close(); err != nil {
 			log.Printf("kafka producer: close: %v", err)

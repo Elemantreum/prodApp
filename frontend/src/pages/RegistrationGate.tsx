@@ -1,97 +1,93 @@
-import { useCallback, useEffect, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import { api, ApiError } from "../api/client";
-import { Button } from "../components/Button";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { api } from "../api/client";
+import type { User } from "../api/types";
+import { useAuth } from "../auth/AuthContext";
+import { ProfileContext } from "../auth/Profile";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { Layout } from "../components/Layout";
 import { Spinner } from "../components/Spinner";
+import { t } from "../i18n";
+import "../styles/personal.css";
 
-type Status = "checking" | "needs-registration" | "ready";
-
-/**
- * Обязательная "регистрация" при первом входе: пока User.isRegistered
- * false, вместо остального приложения показываем один единственный экран —
- * "как вас зовут" — и не пускаем дальше, пока не сохранят. Флаг переводится
- * в true на бэке первым же успешным UpdateProfile (см. UserService), так
- * что сам сабмит — это обычный updateProfile, никакой отдельной ручки не
- * нужно. Сидит внутри LoginGate: к этому моменту токен уже есть.
- */
 export function RegistrationGate({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>("checking");
+  const { claims } = useAuth();
+  return <Registration key={claims?.user_id}>{children}</Registration>;
+}
+
+function Registration({ children }: { children: ReactNode }) {
+  const [profile, setProfile] = useState<User | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const check = useCallback(async () => {
-    setStatus("checking");
-    setError(null);
-    try {
-      const profile = await api.getOwnProfile();
-      if (profile.isRegistered) {
-        setStatus("ready");
-      } else {
-        setFirstName(profile.firstName);
-        setLastName(profile.lastName);
-        setStatus("needs-registration");
-      }
-    } catch (e) {
-      // Не блокируем намертво, если сам проверочный запрос упал — пусть
-      // остальное приложение само разбирается с ошибкой при следующем вызове.
-      setStatus("ready");
-      void e;
-    }
-  }, []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    check();
-  }, [check]);
+    let active = true;
+    setError("");
+    api
+      .getOwnProfile()
+      .then((user) => {
+        if (!active) return;
+        setProfile(user);
+        setFirstName(user.firstName);
+        setLastName(user.lastName);
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : t("Не удалось проверить профиль"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
     try {
-      await api.updateProfile(firstName.trim(), lastName.trim());
-      setStatus("ready");
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось сохранить");
+      setProfile(await api.updateProfile(firstName.trim(), lastName.trim()));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Не удалось сохранить"));
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   }
-
-  if (status === "checking") {
-    return (
-      <div className="gate">
-        <Spinner size={32} />
-      </div>
-    );
-  }
-
-  if (status === "needs-registration") {
-    return (
-      <div className="gate">
-        <div className="gate__form">
-          <h1 className="gate__title">Добро пожаловать</h1>
-          <p>Прежде чем продолжить, представьтесь — это займёт секунду.</p>
-          <form className="form" onSubmit={handleSubmit}>
-            <label className="form__field">
-              <span>Имя</span>
-              <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required autoFocus />
+  if (profile?.isRegistered)
+    return <ProfileContext.Provider value={{ profile, setProfile }}>{children}</ProfileContext.Provider>;
+  return (
+    <Layout publicPage title={t("Регистрация")}>
+      <section className="card personal-panel personal-gate">
+        {error && (
+          <ErrorBanner message={error} onRetry={profile ? undefined : () => setAttempt((value) => value + 1)} />
+        )}
+        {!profile && !error && <Spinner />}
+        {profile && (
+          <form className="personal-form" onSubmit={submit}>
+            <h2>{t("Как к вам обращаться?")}</h2>
+            <label>
+              {t("Имя")}
+              <input
+                autoComplete="given-name"
+                value={firstName}
+                required
+                onChange={(e) => setFirstName(e.target.value)}
+              />
             </label>
-            <label className="form__field">
-              <span>Фамилия</span>
-              <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            <label>
+              {t("Фамилия")}
+              <input
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
             </label>
-            {error && <ErrorBanner message={error} />}
-            <Button type="submit" loading={submitting} disabled={!firstName.trim()}>
-              Продолжить
-            </Button>
+            <button type="submit" className="btn primary" disabled={saving || !firstName.trim()}>
+              {t("Завершить регистрацию")}
+            </button>
           </form>
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+        )}
+      </section>
+    </Layout>
+  );
 }

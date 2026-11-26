@@ -1,0 +1,130 @@
+.admin-screen,
+.admin-dialog {
+  color: var(--ink);
+}
+.admin-screen .row,
+.admin-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-screen .row {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-screen .row:last-child {
+  border-bottom: 0;
+}
+.admin-screen .grow {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-screen small,
+.admin-dialog small {
+  display: block;
+  color: var(--muted);
+}
+.admin-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+  width: min(480px, calc(100% - 24px));
+  max-height: 88dvh;
+  overflow: auto;
+}
+.admin-dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+.admin-dialog-head {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.admin-dialog-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.admin-screen ul,
+.admin-dialog ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-screen form,
+.admin-dialog form,
+.admin-dialog label:not(.form__checkbox),
+.admin-screen form label {
+  display: grid;
+  gap: 8px;
+}
+.admin-dialog form,
+.admin-screen form {
+  gap: 14px;
+}
+.admin-screen :is(input:not([type="checkbox"]), select),
+.admin-dialog :is(input:not([type="checkbox"]), select) {
+  width: 100%;
+  min-width: 0;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  padding: 9px 12px;
+  border-radius: 9px;
+  font: inherit;
+}
+.admin-screen .avatar {
+  flex-shrink: 0;
+}
+.admin-screen .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.admin-dialog .admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.admin-screen .btn,
+.admin-dialog .btn {
+  width: auto;
+}
+
+.admin-screen .venue-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  margin-block: 14px;
+}
+
+.admin-invites {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-invite-heading,
+.admin-invite-row,
+.admin-invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.admin-invite-heading,
+.admin-invite-row {
+  justify-content: space-between;
+}
+
+.admin-invite-row {
+  padding-block: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-invite-row .personal-detail {
+  flex: 1 1 12rem;
+}

@@ -1,235 +1,238 @@
-import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import { api, ApiError } from "../api/client";
-import type { User } from "../api/types";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useProfile } from "../auth/Profile";
+import { useSectionDirectory } from "../auth/Sections";
+import { AdminDialog } from "../components/AdminUI";
+import { ErrorBanner } from "../components/ErrorBanner";
+import { Layout } from "../components/Layout";
+import { t } from "../i18n";
 import { getTelegramInitData } from "../platform/telegram";
 import { getVkLaunchQuery } from "../platform/vk";
-import { Layout } from "../components/Layout";
-import { Button } from "../components/Button";
-import { Spinner } from "../components/Spinner";
-import { ErrorBanner } from "../components/ErrorBanner";
+import "../styles/personal.css";
 
-const PLATFORM_LABEL: Record<string, string> = {
-  telegram: "Telegram",
-  vk: "VK",
-  browser: "браузер",
-};
+function platformName(provider: string) {
+  if (provider === "browser") return t("браузер");
+  return provider === "telegram" ? "Telegram" : provider === "vk" ? "VK" : provider;
+}
 
 export function AccountPage() {
-  const { platform, claims, loginWithToken } = useAuth();
-
-  const [profile, setProfile] = useState<User | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [savingName, setSavingName] = useState(false);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [nameSaved, setNameSaved] = useState(false);
-
-  const [code, setCode] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [genError, setGenError] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-
-  const [inputCode, setInputCode] = useState("");
+  const { platform, applyTokens } = useAuth();
+  const { profile, setProfile } = useProfile();
+  const { choose, current, directory } = useSectionDirectory();
+  const canEditProfile = directory.systemAdmin || !profile.profileLocked;
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
-  const [linkSuccess, setLinkSuccess] = useState(false);
-
-  const loadProfile = useCallback(async () => {
-    setProfileError(null);
-    try {
-      const p = await api.getOwnProfile();
-      setProfile(p);
-      setFirstName(p.firstName);
-      setLastName(p.lastName);
-    } catch (e) {
-      setProfileError(e instanceof ApiError ? e.message : "Не удалось загрузить профиль");
-    }
-  }, []);
+  const [firstName, setFirstName] = useState(profile.firstName);
+  const [lastName, setLastName] = useState(profile.lastName);
+  const [code, setCode] = useState("");
+  const [expires, setExpires] = useState(0);
+  const [now, setNow] = useState(Date.now);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const seconds = Math.max(0, Math.ceil((expires - now) / 1000));
 
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (!expires) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [expires]);
 
-  useEffect(() => {
-    if (!expiresAt) return;
-    const tick = () => setSecondsLeft(Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [expiresAt]);
-
-  async function handleSaveName(e: FormEvent) {
-    e.preventDefault();
-    setSavingName(true);
-    setNameError(null);
-    setNameSaved(false);
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    setMessage("");
     try {
-      const updated = await api.updateProfile(firstName.trim(), lastName.trim());
-      setProfile(updated);
-      setNameSaved(true);
-    } catch (e) {
-      setNameError(e instanceof ApiError ? e.message : "Не удалось сохранить");
+      await action();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Не удалось сохранить"));
     } finally {
-      setSavingName(false);
+      setBusy(false);
     }
   }
 
-  async function handleGenerate() {
-    setGenerating(true);
-    setGenError(null);
-    try {
-      const res = await api.generateLinkCode();
-      setCode(res.code);
-      setExpiresAt(res.expiresAt);
-    } catch (e) {
-      setGenError(e instanceof ApiError ? e.message : "Не удалось получить код");
-    } finally {
-      setGenerating(false);
-    }
+  function save(event: FormEvent) {
+    event.preventDefault();
+    void run(async () => {
+      setProfile(await api.updateProfile(firstName.trim(), lastName.trim()));
+      setEditing(false);
+      setMessage(t("Сохранено"));
+    });
   }
 
-  async function handleLink(e: FormEvent) {
-    e.preventDefault();
-    setLinking(true);
-    setLinkError(null);
-    setLinkSuccess(false);
-    try {
-      let token: string;
-      if (platform === "telegram") {
-        const initData = getTelegramInitData();
-        if (!initData) throw new Error("Telegram initData недоступен");
-        token = (await api.linkTelegram(initData, inputCode.trim().toUpperCase())).access_token;
-      } else if (platform === "vk") {
-        token = (await api.linkVk(getVkLaunchQuery(), inputCode.trim().toUpperCase())).access_token;
-      } else {
-        throw new Error("Привязка доступна только внутри Telegram или VK");
-      }
-
-      loginWithToken(token);
-      setLinkSuccess(true);
-      setInputCode("");
-      loadProfile(); // подтянуть только что появившуюся вторую identity
-    } catch (e) {
-      setLinkError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Не удалось привязать аккаунт");
-    } finally {
-      setLinking(false);
-    }
+  function link(event: FormEvent) {
+    event.preventDefault();
+    void run(async () => {
+      const code = input.trim().toUpperCase();
+      const data = getTelegramInitData();
+      if (platform === "telegram" && !data) throw new Error(t("Telegram initData недоступен"));
+      const tokens =
+        platform === "telegram"
+          ? await api.linkTelegram(data, code)
+          : await api.linkVk(getVkLaunchQuery(), code);
+      applyTokens(tokens);
+      setProfile(await api.getOwnProfile());
+      setInput("");
+      setMessage(t("Готово, аккаунты объединены."));
+    });
   }
-
-  // Зеркалит UserService.UpdateProfile на бэке: админ может всегда, обычный
-  // юзер — только пока не одобрен.
-  const canEditName = profile ? profile.isAdmin || !profile.isApproved : false;
 
   return (
-    <Layout title="Аккаунт">
-      <div className="list">
-        <div className="card account-card">
-          <div className="card__title">Вы вошли через {PLATFORM_LABEL[platform] ?? platform}</div>
-          <div className="card__meta">ID аккаунта: {claims?.user_id}</div>
-
-          {profileError && <ErrorBanner message={profileError} onRetry={loadProfile} />}
-
-          {profile === null && !profileError && (
-            <div className="centered">
-              <Spinner size={20} />
-            </div>
+    <Layout title={t("Профиль")} standalone={!current}>
+      {error && !linking && !editing && <ErrorBanner message={error} />}
+      {message && <p role="status">{message}</p>}
+      <div className="grid personal-grid">
+        <section className="card personal-panel">
+          <h2>{[profile.firstName, profile.lastName].filter(Boolean).join(" ") || t("Без имени")}</h2>
+          <small>
+            {t("ID аккаунта:")} {profile.id} · {t("Вы вошли через")} {platformName(platform)}
+          </small>
+          {profile.identities?.map((identity) => (
+            <p key={identity.provider} className="muted">
+              {platformName(identity.provider)} ·{" "}
+              {identity.username ? `@${identity.username.replace(/^@/, "")}` : identity.externalId}
+            </p>
+          ))}
+          {editing && canEditProfile && (
+            <AdminDialog title={t("Изменить профиль")} busy={busy} onClose={() => setEditing(false)}>
+              <form className="personal-form" onSubmit={save}>
+                <label>
+                  {t("Имя")}
+                  <input
+                    autoComplete="given-name"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("Фамилия")}
+                  <input
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </label>
+                {error && <ErrorBanner message={error} />}
+                <div className="actions">
+                  <button className="btn primary" disabled={busy || !firstName.trim()}>
+                    {t("Сохранить")}
+                  </button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => setEditing(false)}>
+                    {t("Отменить")}
+                  </button>
+                </div>
+              </form>
+            </AdminDialog>
           )}
-
-          {profile && (
-            <div className="card__meta">
-              Привязанные платформы:{" "}
-              {profile.identities.length === 0
-                ? "нет данных"
-                : profile.identities.map((i) => PLATFORM_LABEL[i.provider] ?? i.provider).join(", ")}
-            </div>
+          {canEditProfile ? (
+            <button
+              className="btn"
+              onClick={() => {
+                setFirstName(profile.firstName);
+                setLastName(profile.lastName);
+                setError("");
+                setEditing(true);
+              }}
+            >
+              {t("Изменить профиль")}
+            </button>
+          ) : (
+            <small>{t("После вступления в секцию имя может изменить системный администратор.")}</small>
           )}
-        </div>
-
-        {profile && (
-          <div className="card account-card">
-            <div className="card__title">Имя и фамилия</div>
-            {canEditName ? (
+          <button
+            className="btn"
+            onClick={() => {
+              setError("");
+              setLinking(true);
+            }}
+          >
+            {t("Привязать другую платформу")}
+          </button>
+        </section>
+        <section className="card personal-panel">
+          <h2>{t("Мои секции")}</h2>
+          {directory.sections.map((section) => (
+            <div className="row personal-section" key={section.id}>
+              <span className="personal-avatar">
+                {section.logo ? <img src={section.logo} alt="" /> : section.name.slice(0, 1)}
+              </span>
+              <span className="personal-detail">
+                <strong>{section.name}</strong>
+                <small>{section.admin ? t("Администратор секции") : t("Участник")}</small>
+              </span>
+              <button
+                className="btn"
+                onClick={() => {
+                  choose(section.id);
+                  navigate("/");
+                }}
+              >
+                {t("Перейти")}
+              </button>
+            </div>
+          ))}
+          <Link className="btn" to="/invite">
+            {t("Ввести код приглашения")}
+          </Link>
+        </section>
+      </div>
+      {linking && (
+        <AdminDialog title={t("Привязать другую платформу")} busy={busy} onClose={() => setLinking(false)}>
+          <div className="personal-panel">
+            {error && <ErrorBanner message={error} />}
+            <p className="muted">
+              {t(
+                "Один человек может входить и из Telegram, и из VK под одним аккаунтом. Получите код здесь, затем откройте это же приложение на другой платформе и введите код там, на этой же странице.",
+              )}
+            </p>
+            {code && seconds > 0 ? (
               <>
-                <div className="card__meta">Можно менять, пока аккаунт не одобрен администратором.</div>
-                <form className="form" onSubmit={handleSaveName}>
-                  <label className="form__field">
-                    <span>Имя</span>
-                    <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-                  </label>
-                  <label className="form__field">
-                    <span>Фамилия</span>
-                    <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                  </label>
-                  <Button type="submit" loading={savingName}>
-                    Сохранить
-                  </Button>
-                </form>
-                {nameError && <ErrorBanner message={nameError} />}
-                {nameSaved && <div className="success-banner">Сохранено</div>}
+                <strong className="personal-code">{code}</strong>
+                <small>
+                  {t("Действует ещё")} {seconds} {t("сек")}
+                </small>
               </>
             ) : (
               <>
-                <div className="card__title">{[profile.firstName, profile.lastName].filter(Boolean).join(" ") || "—"}</div>
-                <div className="card__meta">Аккаунт одобрен — изменить имя может только администратор.</div>
+                {code && <small>{t("Код истёк")}</small>}
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      const result = await api.generateLinkCode();
+                      setCode(result.code);
+                      setExpires(Date.parse(result.expiresAt));
+                      setNow(Date.now());
+                    })
+                  }
+                >
+                  {code ? t("Получить новый") : t("Получить код")}
+                </button>
               </>
             )}
           </div>
-        )}
-
-        <div className="card account-card">
-          <div className="card__title">Привязать другую платформу</div>
-          <div className="card__meta">
-            Один человек может входить и из Telegram, и из VK под одним аккаунтом. Получите код здесь, затем
-            откройте это же приложение на другой платформе и введите код там, на этой же странице.
-          </div>
-
-          {code ? (
-            secondsLeft > 0 ? (
-              <div className="link-code">
-                <div className="link-code__value">{code}</div>
-                <div className="link-code__hint">Действует ещё {secondsLeft} сек</div>
-              </div>
-            ) : (
-              <div className="link-code">
-                <div className="link-code__hint">Код истёк</div>
-                <Button variant="secondary" loading={generating} onClick={handleGenerate}>
-                  Получить новый
-                </Button>
-              </div>
-            )
-          ) : (
-            <Button variant="secondary" loading={generating} onClick={handleGenerate}>
-              Получить код
-            </Button>
+          {(platform === "telegram" || platform === "vk") && (
+            <section className="personal-link-form personal-panel">
+              <h2>{t("Ввести код с другой платформы")}</h2>
+              <form className="personal-form" onSubmit={link}>
+                <label>
+                  {t("Код")}
+                  <input required value={input} onChange={(e) => setInput(e.target.value)} />
+                </label>
+                <button className="btn primary" disabled={busy || !input.trim()}>
+                  {t("Привязать")}
+                </button>
+              </form>
+            </section>
           )}
-          {genError && <ErrorBanner message={genError} />}
-        </div>
-
-        <div className="card account-card">
-          <div className="card__title">Ввести код с другой платформы</div>
-          <form className="form" onSubmit={handleLink}>
-            <label className="form__field">
-              <span>Код</span>
-              <input
-                type="text"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
-                placeholder="XXXXXXXX"
-                required
-              />
-            </label>
-            <Button type="submit" loading={linking} disabled={!inputCode.trim()}>
-              Привязать
-            </Button>
-          </form>
-          {linkError && <ErrorBanner message={linkError} />}
-          {linkSuccess && <div className="success-banner">Готово, аккаунты объединены.</div>}
-        </div>
-      </div>
+        </AdminDialog>
+      )}
     </Layout>
   );
 }

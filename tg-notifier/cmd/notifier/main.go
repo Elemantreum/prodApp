@@ -89,6 +89,16 @@ func main() {
 			})
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		kafka.Consume(ctx, cfg.KafkaBrokers, cfg.KafkaConsumerGroup, func(ctx context.Context, e events.OnTrainingPlaceAvailable) {
+			message := fmt.Sprintf("Освободилось место на тренировке «%s» %s. Открой приложение, чтобы записаться.", e.Description, e.Date.In(moscowTZ).Format("02.01 в 15:04"))
+			if err := tgNotifier.NotifyMany(ctx, e.ChatIds, message); err != nil {
+				log.Printf("waitlist: notify: %v", err)
+			}
+		})
+	}()
 	wg.Wait()
 	log.Printf("tg-notifier: shutting down")
 }

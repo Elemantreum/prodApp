@@ -38,7 +38,6 @@ func NewBookingHandler(service *BookingService) *BookingHandler {
 // @Param        request  body      signUpForTrainingRequest  true  "ID тренировки"
 // @Success      200      {object}  Booking
 // @Failure      401      {object}  map[string]string  "не авторизован"
-// @Failure      403      {object}  map[string]string  "аккаунт ещё не одобрен администратором"
 // @Failure      500      {object}  map[string]string  "внутренняя ошибка сервера"
 // @Router       /booking/signUp [post]
 func (handler *BookingHandler) SignupForTraining(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +94,12 @@ func (handler *BookingHandler) GetBookingsByUserId(w http.ResponseWriter, r *htt
 		return
 	}
 
-	bookings, err := handler.BookingService.GetAllBookingsByUserId(r.Context(), userId, claims)
+	if !claims.IsAdmin && userId != claims.UserID {
+		http2.RespondError(w, &apperrors.ForbiddenError{})
+		return
+	}
+
+	bookings, err := handler.BookingService.GetAllBookingsByUserId(r.Context(), userId)
 
 	if err != nil {
 		http2.RespondError(w, err)
@@ -250,12 +254,103 @@ func (handler *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err = handler.BookingService.CancelBooking(r.Context(), req.BookingId, claims)
-
+	booking, err := handler.BookingService.GetBooking(r.Context(), req.BookingId)
 	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	if !claims.IsAdmin && booking.UserId != claims.UserID {
+		http2.RespondError(w, &apperrors.ForbiddenError{})
+		return
+	}
+
+	if err := handler.BookingService.CancelBooking(r.Context(), *booking); err != nil {
 		http2.RespondError(w, err)
 		return
 	}
 
 	http2.RespondJSON(w, http.StatusOK, true)
+}
+
+func (h *BookingHandler) OwnWaitlist(w http.ResponseWriter, r *http.Request) {
+	claims, ok := http2.ClaimsFromContext(r.Context())
+	if !ok {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+	items, err := h.BookingService.OwnWaitlist(r.Context(), claims.UserID)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, items)
+}
+
+func (h *BookingHandler) SetWaiting(w http.ResponseWriter, r *http.Request) {
+	claims, ok := http2.ClaimsFromContext(r.Context())
+	if !ok {
+		http2.RespondError(w, &apperrors.UnauthorizedError{})
+		return
+	}
+	id, err := strconv.Atoi(r.URL.Query().Get("trainingId"))
+	if err != nil || id <= 0 {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "trainingId"})
+		return
+	}
+	err = h.BookingService.SetWaiting(r.Context(), claims.UserID, id, r.Method == http.MethodPut)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, http.StatusOK, true)
+}
+
+func (h *BookingHandler) Manage(w http.ResponseWriter, r *http.Request) {
+	var change BookingChange
+	if json.NewDecoder(r.Body).Decode(&change) != nil || change.TrainingID < 1 {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "trainingId"})
+		return
+	}
+	if err := h.BookingService.Manage(r.Context(), change); err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, 200, true)
+}
+
+func (h *BookingHandler) WaitingMembers(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.URL.Query().Get("trainingId"))
+	if err != nil {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "trainingId"})
+		return
+	}
+	list, err := h.BookingService.WaitingMembers(r.Context(), id)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, 200, list)
+}
+
+func (h *BookingHandler) SectionBookings(w http.ResponseWriter, r *http.Request) {
+	list, err := h.BookingService.SectionBookings(r.Context())
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, 200, list)
+}
+
+func (h *BookingHandler) UserHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.URL.Query().Get("userId"))
+	if err != nil || id < 1 {
+		http2.RespondError(w, &apperrors.ValidationError{Field: "userId"})
+		return
+	}
+	list, err := h.BookingService.UserHistory(r.Context(), id)
+	if err != nil {
+		http2.RespondError(w, err)
+		return
+	}
+	http2.RespondJSON(w, 200, list)
 }

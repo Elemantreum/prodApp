@@ -1,65 +1,95 @@
-import { NavLink } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { matchPath, NavLink } from "react-router-dom";
+import { useSection } from "../auth/Sections";
+import { t } from "../i18n";
 
-const ICONS = {
-  trainings: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  ),
-  bookings: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  ),
-  admin: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    </svg>
-  ),
-  sinners: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <circle cx="12" cy="9" r="5" stroke="currentColor" strokeWidth="2" />
-      <path d="M9.5 8h.01M14.5 8h.01M9 12c1 1 4 1 5 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M8 13.5L5 21M16 13.5l3 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  ),
-  account: (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="2" />
-      <path d="M4.5 20c1.5-4 5-5.5 7.5-5.5s6 1.5 7.5 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  ),
-};
+const schedule = ["/", "Расписание", "▦"] as const;
+const bookings = ["/bookings", "Мои записи", "▤"] as const;
+const profile = ["/account", "Профиль", "◉"] as const;
+type Destination = readonly [path: string, label: string, icon: string];
 
-export function TabBar() {
-  const { claims } = useAuth();
+const systemPages: Destination[] = [
+  ["/admin/sections", "Секции", "◈"],
+  ["/admin/users", "Пользователи", "◎"],
+  ["/admin/administrators", "Администраторы", "◇"],
+];
+
+export function isSystemPage(pathname: string) {
+  return systemPages.some(([path]) => matchPath(path, pathname));
+}
+
+function NavigationLinks({ pages, onNavigate }: { pages: Destination[]; onNavigate?: () => void }) {
+  return pages.map(([path, label, icon]) => (
+    <NavLink
+      key={path}
+      to={path}
+      end
+      onClick={onNavigate}
+      className={({ isActive }) => (isActive ? "current" : "")}
+    >
+      <span className="num" aria-hidden="true">
+        {icon}
+      </span>
+      {t(label)}
+    </NavLink>
+  ));
+}
+
+export function SystemNavigation({ onMore, onNavigate }: { onMore?: () => void; onNavigate?: () => void }) {
+  const { directory } = useSection();
+  if (!directory.systemAdmin) return null;
+  const title = t("Управление системой");
 
   return (
-    <nav className="tab-bar">
-      <NavLink to="/" end className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
-        {ICONS.trainings}
-        <span>Тренировки</span>
-      </NavLink>
-      <NavLink to="/bookings" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
-        {ICONS.bookings}
-        <span>Мои записи</span>
-      </NavLink>
-      <NavLink to="/sinners" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
-        {ICONS.sinners}
-        <span>Грешники</span>
-      </NavLink>
-      {claims?.is_admin && (
-        <NavLink to="/admin" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
-          {ICONS.admin}
-          <span>Админ</span>
-        </NavLink>
+    <section className="system-menu">
+      <div className="system-menu__header">
+        <h2>{title}</h2>
+        {onMore && (
+          <button aria-label={t("Меню")} onClick={onMore}>
+            ···
+          </button>
+        )}
+      </div>
+      <nav className="nav" aria-label={title}>
+        <NavigationLinks pages={systemPages} onNavigate={onNavigate} />
+      </nav>
+    </section>
+  );
+}
+
+export function Navigation({
+  compact = false,
+  onMore,
+  onNavigate,
+}: {
+  compact?: boolean;
+  onMore?: () => void;
+  onNavigate?: () => void;
+}) {
+  const { current } = useSection();
+  const pages: Destination[] = [schedule, bookings];
+  if (!compact) {
+    if (current.admin) {
+      pages.push(
+        ["/admin/members", "Участники", "◎"],
+        ["/admin/bookings", "Записи", "▤"],
+        ["/admin/series", "Серии", "↻"],
+        ["/admin/attendance", "Посещаемость", "◷"],
+        ["/admin/settings", "Настройки секции", "⚙"],
+      );
+    } else pages.push(["/attendance", "Посещаемость", "◷"]);
+  }
+  pages.push(profile);
+  return (
+    <nav className={compact ? "mobileNav" : "nav"} aria-label={t("Навигация")}>
+      <NavigationLinks pages={pages} onNavigate={onNavigate} />
+      {compact && (
+        <button onClick={onMore}>
+          <span className="num" aria-hidden="true">
+            ···
+          </span>
+          {t("Ещё")}
+        </button>
       )}
-      <NavLink to="/account" className={({ isActive }) => `tab-bar__item${isActive ? " tab-bar__item--active" : ""}`}>
-        {ICONS.account}
-        <span>Аккаунт</span>
-      </NavLink>
     </nav>
   );
 }

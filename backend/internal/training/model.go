@@ -3,8 +3,10 @@ package training
 import "time"
 
 type Training struct {
+	Venue       string        `json:"venue"`
 	Id          int           `json:"id"`
 	Description string        `json:"description"`
+	Details     string        `json:"details,omitempty"`
 	Date        time.Time     `json:"date" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`
@@ -17,8 +19,11 @@ type Training struct {
 }
 
 type RecurringTraining struct {
+	Venue       string        `json:"venue"`
+	SectionID   int           `json:"-"`
 	Id          int           `json:"id"`
 	Description string        `json:"description"`
+	Details     string        `json:"details,omitempty"`
 	AnchorDate  time.Time     `json:"anchorDate" format:"date-time" example:"2002-10-02T15:00:00Z"`
 	MaxQuantity int           `json:"maxQuantity"`
 	Duration    time.Duration `json:"duration" swaggertype:"primitive,integer"`

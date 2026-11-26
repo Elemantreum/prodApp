@@ -41,3 +41,10 @@ type OnUserApprovalChanged struct {
 	ChatId   int64
 	Approved bool
 }
+
+type OnTrainingPlaceAvailable struct {
+	TrainingId  int
+	Description string
+	Date        time.Time
+	ChatIds     []int64
+}
